@@ -4,7 +4,9 @@ import uuid
 import base64
 import threading
 import time
+import re
 from datetime import datetime
+from urllib.parse import unquote, quote_plus
 from flask import Flask, request, Response, stream_with_context, send_from_directory, jsonify
 from flask_cors import CORS
 import requests
@@ -14,6 +16,12 @@ try:
     PYPDF_OK = True
 except ImportError:
     PYPDF_OK = False
+
+try:
+    from bs4 import BeautifulSoup
+    BS4_OK = True
+except ImportError:
+    BS4_OK = False
 
 app = Flask(__name__)
 CORS(app)
@@ -33,15 +41,104 @@ MODES = {
     "max":    {"max_tokens": 8000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
 }
 
-# Modèles par défaut (seront écrasés par le catalogue dynamique)
-DEFAULT_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
-DEFAULT_IMAGE_MODEL = "black-forest-labs/flux.2-klein-4b"
+# ============================================================
+# CATALOGUE CURÉ — Modèles principaux uniquement
+# ============================================================
+# Structure : id -> {name, category, description, best_for}
+CURATED_TEXT_MODELS = {
+    # -------- RAPIDES --------
+    "nvidia/nemotron-3.5-lightning-30b-a3b": {
+        "name": "Nemotron 3.5 Lightning",
+        "category": "⚡ Rapide",
+        "category_key": "rapide",
+        "description": "Ultra-rapide, idéal pour les conversations fluides du quotidien.",
+        "best_for": "Chat quotidien, réponses instantanées",
+    },
+    "meta/llama-3.1-8b-instruct": {
+        "name": "Llama 3.1 8B",
+        "category": "⚡ Rapide",
+        "category_key": "rapide",
+        "description": "Léger et très rapide, parfait pour les tâches simples.",
+        "best_for": "Réponses courtes, questions simples",
+    },
+    # -------- ÉQUILIBRÉS --------
+    "meta/llama-3.3-70b-instruct": {
+        "name": "Llama 3.3 70B",
+        "category": "⚖️ Équilibré",
+        "category_key": "equilibre",
+        "description": "Le meilleur compromis vitesse / qualité en 2026.",
+        "best_for": "Usage général, code, rédaction",
+    },
+    "nvidia/llama-3.1-nemotron-70b-instruct": {
+        "name": "Nemotron 70B",
+        "category": "⚖️ Équilibré",
+        "category_key": "equilibre",
+        "description": "Grand modèle NVIDIA, très bon en raisonnement.",
+        "best_for": "Analyse, rédaction, code",
+    },
+    # -------- PUISSANTS --------
+    "nvidia/nemotron-4-340b-instruct": {
+        "name": "Nemotron 4 340B",
+        "category": "💪 Puissant",
+        "category_key": "puissant",
+        "description": "Le plus puissant du catalogue, pour les tâches complexes.",
+        "best_for": "Recherche, raisonnement avancé, code complexe",
+    },
+    # -------- MULTITÂCHE (vision) --------
+    "meta/llama-3.2-11b-vision-instruct": {
+        "name": "Llama 3.2 Vision 11B",
+        "category": "🎨 Multitâche",
+        "category_key": "multitache",
+        "description": "Comprend à la fois le texte ET les images.",
+        "best_for": "Analyse d'images, description visuelle",
+    },
+    "meta/llama-3.2-90b-vision-instruct": {
+        "name": "Llama 3.2 Vision 90B",
+        "category": "🎨 Multitâche",
+        "category_key": "multitache",
+        "description": "Version puissante de Vision, analyse fine des images.",
+        "best_for": "Analyse d'images complexe, OCR avancé",
+    },
+    # -------- RAISONNEMENT --------
+    "deepseek-ai/deepseek-r1": {
+        "name": "DeepSeek R1",
+        "category": "🧠 Raisonnement",
+        "category_key": "raisonnement",
+        "description": "Excelle en maths, logique et réflexion étape par étape.",
+        "best_for": "Maths, problèmes complexes, code algorithmique",
+    },
+}
 
-# Catalogue dynamique (rempli au démarrage)
+# Modèles image principaux
+CURATED_IMAGE_MODELS = {
+    "black-forest-labs/flux.2-klein-4b": {
+        "name": "FLUX.2 Klein 4B",
+        "category": "⚡ Rapide",
+        "category_key": "rapide",
+        "description": "Ultra-rapide (4 étapes), génération en quelques secondes.",
+        "best_for": "Génération rapide, style artistique",
+    },
+    "black-forest-labs/flux.1-schnell": {
+        "name": "FLUX.1 Schnell",
+        "category": "⚖️ Équilibré",
+        "category_key": "equilibre",
+        "description": "Très bonne qualité en 4 étapes, style photoréaliste.",
+        "best_for": "Photo, qualité rapide",
+    },
+    "stabilityai/stable-diffusion-3.5-large": {
+        "name": "Stable Diffusion 3.5",
+        "category": "💪 Puissant",
+        "category_key": "puissant",
+        "description": "Excellent rendu des détails et du texte dans l'image.",
+        "best_for": "Illustrations détaillées, affiches",
+    },
+}
+
+# Catalogue dynamique (sera filtré)
 TEXT_MODELS = {}
 IMAGE_MODELS = {}
-ACTIVE_TEXT_MODEL = DEFAULT_TEXT_MODEL
-ACTIVE_IMAGE_MODEL = DEFAULT_IMAGE_MODEL
+ACTIVE_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
+ACTIVE_IMAGE_MODEL = "black-forest-labs/flux.2-klein-4b"
 
 FLUX_MAX_PROMPT_LEN = 780
 CONNECT_TIMEOUT = 15
@@ -51,29 +148,48 @@ IMAGE_JOBS = {}
 
 
 # ============================================================
-# CATALOGUE DYNAMIQUE
+# CATALOGUE DYNAMIQUE (filtré)
 # ============================================================
 def _classify_model(model_id):
-    """Détermine si un modèle est pour le chat ou pour l'image."""
     mid = model_id.lower()
-    # Mots-clés pour les modèles de génération d'image
     image_keywords = ["flux", "diffusion", "sdxl", "dall", "genai", "image"]
     for kw in image_keywords:
         if kw in mid:
             return "image"
-    # Mots-clés pour les modèles de chat/texte
-    chat_keywords = ["instruct", "chat", "llm", "nemotron", "llama", "qwen", "mistral", "gemma", "deepseek", "phi", "command", "yi", "solar", "zephyr", "vicuna", "falcon", "mpt", "olmo"]
+    chat_keywords = ["instruct", "chat", "llm", "nemotron", "llama", "qwen", "mistral",
+                     "gemma", "deepseek", "phi", "command", "yi", "solar", "zephyr",
+                     "vicuna", "falcon", "mpt", "olmo", "r1"]
     for kw in chat_keywords:
         if kw in mid:
             return "chat"
     return "other"
 
 
+def _build_model_entry(mid, curated_info, kind):
+    entry = {
+        "id": mid,
+        "name": curated_info.get("name") or mid.split("/")[-1].replace("-", " ").title(),
+        "provider": mid.split("/")[0].title() if "/" in mid else "NVIDIA",
+        "category": curated_info.get("category", ""),
+        "category_key": curated_info.get("category_key", ""),
+        "description": curated_info.get("description", "Modèle disponible via l'API NVIDIA."),
+        "best_for": curated_info.get("best_for", ""),
+        "queue": "Variable",
+        "speed": "Variable",
+        "efficiency": "Variable",
+        "default": False,
+    }
+    if kind == "image":
+        entry["endpoint"] = f"{NVIDIA_IMAGE_BASE}/{mid}"
+        entry["payload_format"] = "sdxl" if "stabilityai" in mid.lower() else "flux"
+        entry["steps"] = 30 if "stabilityai" in mid.lower() else 4
+    return entry
+
+
 def fetch_nvidia_models():
-    """Interroge l'endpoint /v1/models de NVIDIA et construit le catalogue."""
+    """Récupère la liste réelle et la filtre au catalogue curé."""
     global TEXT_MODELS, IMAGE_MODELS
     if not NVIDIA_API_KEY:
-        print("[NOVA] Pas de clé API, catalogue vide.", flush=True)
         return
     try:
         r = requests.get(
@@ -82,56 +198,133 @@ def fetch_nvidia_models():
             timeout=(10, 30)
         )
         if r.status_code != 200:
-            print(f"[NOVA] Erreur /v1/models : {r.status_code} -> {r.text[:200]}", flush=True)
+            print(f"[NOVA] Erreur /v1/models : {r.status_code}", flush=True)
             return
         data = r.json()
         models = data.get("data", []) if isinstance(data, dict) else []
-        print(f"[NOVA] {len(models)} modèles récupérés depuis NVIDIA.", flush=True)
+        available_ids = {m.get("id", "") for m in models}
+        print(f"[NOVA] {len(available_ids)} modèles disponibles chez NVIDIA.", flush=True)
 
+        # Filtre : ne garde que les modèles curés qui existent réellement
         text_models = {}
+        for mid, info in CURATED_TEXT_MODELS.items():
+            if mid in available_ids:
+                text_models[mid] = _build_model_entry(mid, info, "chat")
+            else:
+                print(f"[NOVA] ⚠ Texte absent : {mid}", flush=True)
+
         image_models = {}
+        for mid, info in CURATED_IMAGE_MODELS.items():
+            if mid in available_ids:
+                image_models[mid] = _build_model_entry(mid, info, "image")
+            else:
+                print(f"[NOVA] ⚠ Image absente : {mid}", flush=True)
 
-        for m in models:
-            mid = m.get("id", "")
-            if not mid:
-                continue
-            kind = _classify_model(mid)
-            entry = {
-                "id": mid,
-                "name": mid.split("/")[-1].replace("-", " ").title(),
-                "provider": mid.split("/")[0].title() if "/" in mid else "NVIDIA",
-                "description": f"Modèle disponible via l'API NVIDIA.",
-                "queue": "Variable",
-                "speed": "Variable",
-                "efficiency": "Variable",
-                "best_for": "Dépend du modèle",
-                "default": False,
-                "endpoint": mid, # Pour l'image, on construira l'URL complète
-                "payload_format": "flux" # Par défaut pour l'image
-            }
-            if kind == "chat":
-                text_models[mid] = entry
-            elif kind == "image":
-                entry["endpoint"] = f"{NVIDIA_IMAGE_BASE}/{mid}"
-                image_models[mid] = entry
+        # Fallback : si aucun modèle curé n'est disponible, prend le premier disponible
+        if not text_models:
+            for m in models:
+                mid = m.get("id", "")
+                if _classify_model(mid) == "chat":
+                    text_models[mid] = _build_model_entry(mid, {"name": mid.split("/")[-1]}, "chat")
+                    break
 
-        if text_models:
-            TEXT_MODELS = text_models
-            # Met à jour le modèle actif si celui par défaut n'existe plus
-            if ACTIVE_TEXT_MODEL not in TEXT_MODELS:
-                ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
-        if image_models:
-            IMAGE_MODELS = image_models
-            if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS:
-                ACTIVE_IMAGE_MODEL = next(iter(IMAGE_MODELS))
+        TEXT_MODELS = text_models
+        IMAGE_MODELS = image_models
 
-        print(f"[NOVA] Catalogue : {len(TEXT_MODELS)} modèles texte, {len(IMAGE_MODELS)} modèles image.", flush=True)
+        if ACTIVE_TEXT_MODEL not in TEXT_MODELS and TEXT_MODELS:
+            ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
+        if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS and IMAGE_MODELS:
+            ACTIVE_IMAGE_MODEL = next(iter(IMAGE_MODELS))
+
+        print(f"[NOVA] Catalogue final : {len(TEXT_MODELS)} texte, {len(IMAGE_MODELS)} image.", flush=True)
     except Exception as e:
         print(f"[NOVA] Exception /v1/models : {e}", flush=True)
 
 
-# Appel au démarrage
 fetch_nvidia_models()
+
+
+# ============================================================
+# RECHERCHE WEB (DuckDuckGo, gratuit, sans clé)
+# ============================================================
+def web_search(query, max_results=3):
+    """Recherche web via DuckDuckGo HTML (gratuit). Retourne une liste {title, url, snippet, content}."""
+    if not query.strip():
+        return []
+    try:
+        # 1. Recherche
+        r = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+            },
+            timeout=15
+        )
+        if r.status_code != 200:
+            print(f"[NOVA][SEARCH] DDG status {r.status_code}", flush=True)
+            return []
+
+        results = []
+        if BS4_OK:
+            soup = BeautifulSoup(r.text, "html.parser")
+            for el in soup.select(".result")[:max_results]:
+                a = el.select_one(".result__a")
+                snippet_el = el.select_one(".result__snippet")
+                if not a:
+                    continue
+                url = a.get("href", "")
+                # DDG enveloppe les URLs : //duckduckgo.com/l/?uddg=<vraie_url>
+                if "uddg=" in url:
+                    m = re.search(r"uddg=([^&]+)", url)
+                    if m:
+                        url = unquote(m.group(1))
+                results.append({
+                    "title": a.get_text(strip=True),
+                    "url": url,
+                    "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
+                })
+        else:
+            # Fallback regex basique si BeautifulSoup absent
+            for m in re.finditer(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', r.text)[:max_results]:
+                url = m.group(1)
+                if "uddg=" in url:
+                    m2 = re.search(r"uddg=([^&]+)", url)
+                    if m2:
+                        url = unquote(m2.group(1))
+                results.append({"title": re.sub(r"<[^>]+>", "", m.group(2)), "url": url, "snippet": ""})
+
+        print(f"[NOVA][SEARCH] '{query[:50]}' -> {len(results)} résultats", flush=True)
+
+        # 2. Extraction rapide du contenu (2 premiers résultats)
+        for i, res in enumerate(results[:2]):
+            try:
+                rr = requests.get(
+                    res["url"],
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; NOVA/1.0)"},
+                    timeout=8
+                )
+                if rr.status_code == 200:
+                    if BS4_OK:
+                        s = BeautifulSoup(rr.text, "html.parser")
+                        for tag in s(["script", "style", "nav", "footer", "header", "aside"]):
+                            tag.decompose()
+                        text = " ".join(s.get_text(separator=" ").split())
+                    else:
+                        text = re.sub(r"<[^>]+>", " ", rr.text)
+                        text = " ".join(text.split())
+                    res["content"] = text[:1500]
+                else:
+                    res["content"] = res.get("snippet", "")
+            except Exception as e:
+                res["content"] = res.get("snippet", "")
+
+        return results
+    except Exception as e:
+        print(f"[NOVA][SEARCH] Exception : {e}", flush=True)
+        return []
 
 
 # ============================================================
@@ -169,12 +362,6 @@ def select_model():
     return {"error": "Type inconnu."}, 400
 
 
-@app.route("/api/models/refresh", methods=["POST"])
-def refresh_models():
-    fetch_nvidia_models()
-    return {"ok": True, "text_count": len(TEXT_MODELS), "image_count": len(IMAGE_MODELS)}
-
-
 # ============================================================
 # UTILITAIRES
 # ============================================================
@@ -196,19 +383,12 @@ def _describe_image(data_url, max_words=250):
     try:
         prompt = (
             "Décris cette image de façon purement visuelle, neutre et positive, "
-            "en français, comme pour un prompt de génération d'image artistique.\n\n"
-            "Décris UNIQUEMENT :\n"
-            "- Les formes et objets visibles\n"
-            "- Les couleurs dominantes et leurs nuances\n"
-            "- Le style visuel (photo, illustration, peinture, 3D...)\n"
-            "- L'ambiance générale\n"
-            "- Les éléments de décor\n\n"
-            f"Maximum {max_words} mots. Sois descriptif mais neutre. "
-            "Ne mentionne NI personne, NI visage, NI émotion, NI marque, NI texte. "
+            "en français. Décris UNIQUEMENT : formes, couleurs, style, ambiance, décor. "
+            f"Maximum {max_words} mots. Ne mentionne NI personne, NI visage, NI marque. "
             "Réponds uniquement par la description."
         )
         payload = {
-            "model": VISION_MODEL,
+            "model": "meta/llama-3.2-11b-vision-instruct",
             "messages": [{
                 "role": "user",
                 "content": [
@@ -217,7 +397,6 @@ def _describe_image(data_url, max_words=250):
                 ]
             }],
             "temperature": 0.2,
-            "top_p": 0.9,
             "max_tokens": 500,
             "stream": False,
         }
@@ -226,23 +405,20 @@ def _describe_image(data_url, max_words=250):
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        r = requests.post(NVIDIA_CHAT_URL, json=payload, headers=headers,
-                          timeout=(15, 90))
+        r = requests.post(NVIDIA_CHAT_URL, json=payload, headers=headers, timeout=(15, 90))
         if r.status_code != 200:
-            print(f"[NOVA][VISION ERR] {r.status_code} -> {r.text[:300]}", flush=True)
+            print(f"[NOVA][VISION ERR] {r.status_code}", flush=True)
             return ""
         data = r.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        description = (content or "").strip()
-        print(f"[NOVA][VISION OK] len={len(description)} chars", flush=True)
-        return description
+        return (content or "").strip()
     except Exception as e:
         print(f"[NOVA][VISION EXCEPTION] {e}", flush=True)
         return ""
 
 
 # ============================================================
-# ROUTE CHAT
+# ROUTE CHAT (avec recherche web optionnelle)
 # ============================================================
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -256,6 +432,7 @@ def chat():
     mode = data.get("mode", "moyen")
     config = data.get("config", {})
     attachments = data.get("attachments", [])
+    use_web_search = bool(data.get("web_search", False))
 
     cfg = MODES.get(mode, MODES["moyen"])
     ai_name = config.get("aiName", "NOVA")
@@ -266,6 +443,28 @@ def chat():
     now = datetime.now()
     date_str = f"{now.day}/{now.month}/{now.year}"
 
+    # === Recherche web si demandée ===
+    search_context = ""
+    last_user_text = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last_user_text = m.get("content", "")
+            break
+
+    if use_web_search and last_user_text.strip():
+        results = web_search(last_user_text, max_results=3)
+        if results:
+            parts = []
+            for i, r in enumerate(results, 1):
+                parts.append(f"[Source {i}] {r['title']}\nURL : {r['url']}\n{r.get('content') or r.get('snippet','')}")
+            search_context = (
+                "Voici des informations récentes trouvées sur Internet "
+                f"(nous sommes le {date_str}). Base ta réponse sur ces informations "
+                "quand c'est pertinent, et cite tes sources en mentionnant l'URL :\n\n"
+                + "\n\n---\n\n".join(parts)
+            )
+            print(f"[NOVA][CHAT] Recherche web activée : {len(results)} sources", flush=True)
+
     system_prompt = (
         f"Tu t'appelles {ai_name}. {personality} "
         f"Tu reponds TOUJOURS en francais. "
@@ -273,10 +472,17 @@ def chat():
     )
 
     has_image = any(a.get("type") == "image" for a in attachments)
-    model = VISION_MODEL if has_image else ACTIVE_TEXT_MODEL
+    if has_image and ACTIVE_TEXT_MODEL != "meta/llama-3.2-11b-vision-instruct":
+        model = "meta/llama-3.2-11b-vision-instruct"
+    else:
+        model = ACTIVE_TEXT_MODEL
 
     trimmed = messages[-20:] if len(messages) > 20 else messages[:]
     final_messages = [{"role": "system", "content": system_prompt}]
+
+    # Injecte le contexte web comme message système additionnel
+    if search_context:
+        final_messages.append({"role": "system", "content": search_context})
 
     for idx, m in enumerate(trimmed):
         is_last_user = (idx == len(trimmed) - 1 and m.get("role") == "user")
@@ -285,28 +491,20 @@ def chat():
             content_parts = []
             if m.get("content"):
                 content_parts.append({"type": "text", "text": m["content"]})
-
             for att in attachments:
                 if att.get("type") == "text":
                     content_parts.append({
                         "type": "text",
-                        "text": (
-                            f"\n\n--- Fichier joint : {att.get('filename','document')} ---\n"
-                            f"{att.get('content','')}\n--- Fin du fichier ---\n"
-                        )
+                        "text": f"\n\n--- {att.get('filename','document')} ---\n{att.get('content','')}\n---\n"
                     })
                 elif att.get("type") == "image":
-                    desc = att.get("description") or att.get("_description")
+                    desc = att.get("description")
                     if desc:
-                        content_parts.append({
-                            "type": "text",
-                            "text": f"\n\n[Description de l'image : {desc}]\n"
-                        })
+                        content_parts.append({"type": "text", "text": f"\n[Description image : {desc}]\n"})
                     content_parts.append({
                         "type": "image_url",
                         "image_url": {"url": att.get("data_url", "")}
                     })
-
             final_messages.append({"role": "user", "content": content_parts})
         else:
             final_messages.append({
@@ -357,7 +555,20 @@ def chat():
 
 
 # ============================================================
-# UPLOAD (inchangé)
+# ROUTE RECHERCHE WEB DIRECTE (pour test)
+# ============================================================
+@app.route("/api/search", methods=["POST"])
+def search_endpoint():
+    data = request.get_json() or {}
+    q = (data.get("query") or "").strip()
+    if not q:
+        return {"error": "Requête vide."}, 400
+    results = web_search(q, max_results=5)
+    return {"query": q, "results": results}
+
+
+# ============================================================
+# UPLOAD
 # ============================================================
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".markdown", ".csv", ".json", ".xml", ".html", ".htm",
@@ -373,11 +584,9 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 def upload():
     if "file" not in request.files:
         return {"error": "Aucun fichier reçu."}, 400
-
     f = request.files["file"]
     if not f.filename:
         return {"error": "Nom de fichier vide."}, 400
-
     filename = f.filename
     ext = os.path.splitext(filename)[1].lower()
     try:
@@ -388,22 +597,20 @@ def upload():
 
     if ext == ".pdf":
         if not PYPDF_OK:
-            return {"error": "Support PDF indisponible (pypdf non installé)."}, 500
+            return {"error": "Support PDF indisponible."}, 500
         try:
             reader = PdfReader(io.BytesIO(file_bytes))
             pages_text = []
-            for i, page in enumerate(reader.pages[:50]):
+            for page in reader.pages[:50]:
                 try:
                     pages_text.append(page.extract_text() or "")
                 except Exception:
                     pages_text.append("")
             text = "\n".join(pages_text).strip()
             if not text:
-                return {"error": "Aucun texte extractible (PDF scanné ?)."}, 400
-            return {
-                "type": "text", "filename": filename, "size": size,
-                "content": text[:50000], "truncated": len(text) > 50000,
-            }
+                return {"error": "Aucun texte extractible."}, 400
+            return {"type": "text", "filename": filename, "size": size,
+                    "content": text[:50000], "truncated": len(text) > 50000}
         except Exception as e:
             return {"error": f"Erreur PDF : {e}"}, 500
 
@@ -415,32 +622,25 @@ def upload():
                 text = file_bytes.decode("latin-1", errors="replace")
             except Exception as e:
                 return {"error": f"Décodage impossible : {e}"}, 500
-        return {
-            "type": "text", "filename": filename, "size": size,
-            "content": text[:50000], "truncated": len(text) > 50000,
-        }
+        return {"type": "text", "filename": filename, "size": size,
+                "content": text[:50000], "truncated": len(text) > 50000}
 
     if ext in IMAGE_EXTENSIONS:
         if size > 8 * 1024 * 1024:
             return {"error": "Image trop volumineuse (max 8 Mo)."}, 400
-        mime = {
-            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-            ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp",
-        }.get(ext, "image/png")
+        mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp"}.get(ext, "image/png")
         b64 = base64.b64encode(file_bytes).decode("ascii")
         data_url = f"data:{mime};base64,{b64}"
         description = _describe_image(data_url)
-        print(f"[NOVA][UPLOAD IMAGE] {filename} | desc = {description[:100]}...", flush=True)
-        return {
-            "type": "image", "filename": filename, "size": size,
-            "mime": mime, "data_url": data_url, "description": description,
-        }
+        return {"type": "image", "filename": filename, "size": size,
+                "mime": mime, "data_url": data_url, "description": description}
 
     return {"error": f"Type de fichier non supporté : {ext or '?'}"}, 400
 
 
 # ============================================================
-# GÉNÉRATION D'IMAGES (dynamique selon le modèle choisi)
+# GÉNÉRATION D'IMAGES
 # ============================================================
 def _save_image_result(job_id, r):
     result = r.json()
@@ -451,12 +651,8 @@ def _save_image_result(job_id, r):
         reason = art.get("finishReason") or art.get("finish_reason")
         if reason == "CONTENT_FILTERED":
             IMAGE_JOBS[job_id]["status"] = "error"
-            IMAGE_JOBS[job_id]["error"] = (
-                "🚫 Description bloquée par le filtre de sécurité NVIDIA. "
-                "Essaie un prompt simple et neutre."
-            )
+            IMAGE_JOBS[job_id]["error"] = "🚫 Description bloquée par le filtre NVIDIA."
             return
-
     if result.get("image"):
         img = result["image"]
         image_url = img if img.startswith("data:") else "data:image/png;base64," + img
@@ -467,30 +663,22 @@ def _save_image_result(job_id, r):
                 image_url = "data:image/png;base64," + art["base64"]
             elif art.get("url"):
                 image_url = art["url"]
-
     if not image_url:
-        print(f"[NOVA][IMAGE FORMAT INCONNU] {str(result)[:300]}", flush=True)
         IMAGE_JOBS[job_id]["status"] = "error"
         IMAGE_JOBS[job_id]["error"] = "Format de réponse inconnu."
         return
-
     IMAGE_JOBS[job_id]["status"] = "done"
     IMAGE_JOBS[job_id]["progress"] = 100
     IMAGE_JOBS[job_id]["image"] = image_url
-    print(f"[NOVA][IMAGE OK] job {job_id}", flush=True)
 
 
 def _run_image_job(job_id, user_prompt):
     try:
-        final_prompt = user_prompt.strip() if user_prompt.strip() else "a beautiful abstract art piece"
+        final_prompt = user_prompt.strip() or "a beautiful abstract art piece"
         final_prompt = _truncate_prompt(final_prompt, max_len=FLUX_MAX_PROMPT_LEN)
-
-        print(f"[NOVA][IMG] prompt ({len(final_prompt)} chars) : {final_prompt[:150]}", flush=True)
-
         IMAGE_JOBS[job_id]["status"] = "generating"
         IMAGE_JOBS[job_id]["progress"] = 30
 
-        # Récupère le modèle actif
         model_info = IMAGE_MODELS.get(ACTIVE_IMAGE_MODEL)
         if not model_info:
             IMAGE_JOBS[job_id]["status"] = "error"
@@ -498,24 +686,18 @@ def _run_image_job(job_id, user_prompt):
             return
 
         endpoint = model_info["endpoint"]
-        payload_format = model_info.get("payload_format", "flux")
+        fmt = model_info.get("payload_format", "flux")
 
-        if payload_format == "sdxl":
+        if fmt == "sdxl":
             payload = {
                 "text_prompts": [{"text": final_prompt}],
-                "cfg_scale": 5.0,
-                "seed": 0,
-                "steps": 30,
-                "width": 1024,
-                "height": 1024,
+                "cfg_scale": 5.0, "seed": 0, "steps": 30,
+                "width": 1024, "height": 1024,
             }
         else:
             payload = {
                 "prompt": final_prompt,
-                "width": 1024,
-                "height": 1024,
-                "steps": 4,
-                "seed": 0,
+                "width": 1024, "height": 1024, "steps": 4, "seed": 0,
             }
 
         headers = {
@@ -523,21 +705,15 @@ def _run_image_job(job_id, user_prompt):
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-
         r = requests.post(endpoint, json=payload, headers=headers, timeout=(20, 300))
         IMAGE_JOBS[job_id]["progress"] = 85
-
         if r.status_code != 200:
-            err_full = r.text[:500]
-            print(f"[NOVA][ERREUR IMAGE] {r.status_code} -> {err_full}", flush=True)
+            err = r.text[:300]
             IMAGE_JOBS[job_id]["status"] = "error"
-            IMAGE_JOBS[job_id]["error"] = f"API {r.status_code}: {err_full[:200]}"
+            IMAGE_JOBS[job_id]["error"] = f"API {r.status_code}: {err}"
             return
-
         _save_image_result(job_id, r)
-
     except Exception as e:
-        print(f"[NOVA][EXCEPTION IMAGE] {e}", flush=True)
         IMAGE_JOBS[job_id]["status"] = "error"
         IMAGE_JOBS[job_id]["error"] = str(e)[:200]
 
@@ -548,21 +724,15 @@ def image_start():
         return {"error": "Cle API manquante."}, 500
     data = request.get_json() or {}
     user_prompt = (data.get("prompt") or "").strip()
-    reference_description = (data.get("reference_description") or "").strip()
-
-    if not user_prompt and not reference_description:
+    ref_desc = (data.get("reference_description") or "").strip()
+    if not user_prompt and not ref_desc:
         return {"error": "Prompt vide."}, 400
-
     if not user_prompt:
-        user_prompt = reference_description[:200]
-
-    print(f"[NOVA][IMG START] prompt='{user_prompt[:80]}'", flush=True)
+        user_prompt = ref_desc[:200]
 
     job_id = str(uuid.uuid4())
-    IMAGE_JOBS[job_id] = {
-        "status": "pending", "progress": 0,
-        "image": None, "error": None, "created": time.time(),
-    }
+    IMAGE_JOBS[job_id] = {"status": "pending", "progress": 0, "image": None,
+                          "error": None, "created": time.time()}
     threading.Thread(target=_run_image_job, args=(job_id, user_prompt), daemon=True).start()
 
     now = time.time()
@@ -577,7 +747,7 @@ def image_start():
 def image_status(job_id):
     job = IMAGE_JOBS.get(job_id)
     if not job:
-        return {"error": "Job introuvable ou expiré."}, 404
+        return {"error": "Job introuvable."}, 404
     return {"status": job["status"], "progress": job["progress"],
             "image": job["image"], "error": job["error"]}
 
@@ -589,13 +759,15 @@ def image_status(job_id):
 def debug():
     return {
         "key_present": bool(NVIDIA_API_KEY),
-        "key_length": len(NVIDIA_API_KEY),
-        "key_valid": NVIDIA_API_KEY.startswith("nvapi-") and len(NVIDIA_API_KEY) > 50,
+        "key_valid": NVIDIA_API_KEY.startswith("nvapi-"),
         "text_models_count": len(TEXT_MODELS),
         "image_models_count": len(IMAGE_MODELS),
+        "text_models_ids": list(TEXT_MODELS.keys()),
+        "image_models_ids": list(IMAGE_MODELS.keys()),
         "active_text_model": ACTIVE_TEXT_MODEL,
         "active_image_model": ACTIVE_IMAGE_MODEL,
         "pypdf_ok": PYPDF_OK,
+        "bs4_ok": BS4_OK,
     }
 
 @app.route("/")
