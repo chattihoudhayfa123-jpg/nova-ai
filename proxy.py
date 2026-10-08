@@ -17,7 +17,7 @@ except ImportError:
 
 app = Flask(__name__)
 CORS(app)
-app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024  # 15 Mo max par fichier
+app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024  # 15 Mo max
 
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "").strip()
 
@@ -25,7 +25,7 @@ NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "").strip()
 NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 MODEL_CHAT = os.environ.get("NVIDIA_MODEL_CHAT", "nvidia/nemotron-3.5-lightning-30b-a3b")
 
-# ====== VISION (pour les images envoyées) ======
+# ====== VISION (analyse des images) ======
 MODEL_VISION = os.environ.get("NVIDIA_MODEL_VISION", "meta/llama-3.2-11b-vision-instruct")
 
 # ====== IMAGE (génération FLUX.2-klein-4B) ======
@@ -43,6 +43,57 @@ READ_TIMEOUT = 120
 IMAGE_JOBS = {}
 
 # ============================================================
+# HELPERS — DESCRIPTION D'IMAGE (VISION)
+# ============================================================
+def _describe_image(data_url, max_words=70):
+    """
+    Envoie l'image au modele vision et retourne une description textuelle.
+    data_url : "data:image/png;base64,..."
+    Retourne "" si echec.
+    """
+    if not NVIDIA_API_KEY or not data_url:
+        return ""
+    try:
+        prompt = (
+            "Tu es un assistant qui décrit précisément les images. "
+            f"Décris cette image en français en {max_words} mots maximum. "
+            "Concentre-toi sur : le sujet principal, les couleurs dominantes, "
+            "le style (photo, dessin, 3D...), l'ambiance et la composition. "
+            "Réponds uniquement par la description, sans introduction."
+        )
+        payload = {
+            "model": MODEL_VISION,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ]
+            }],
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "max_tokens": 200,
+            "stream": False,
+        }
+        headers = {
+            "Authorization": f"Bearer {NVIDIA_API_KEY}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        r = requests.post(NVIDIA_CHAT_URL, json=payload, headers=headers,
+                          timeout=(10, 60))
+        if r.status_code != 200:
+            print(f"[NOVA][VISION ERR] {r.status_code} -> {r.text[:200]}", flush=True)
+            return ""
+        data = r.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return (content or "").strip()
+    except Exception as e:
+        print(f"[NOVA][VISION EXCEPTION] {e}", flush=True)
+        return ""
+
+
+# ============================================================
 # UPLOAD DE FICHIERS
 # ============================================================
 TEXT_EXTENSIONS = {
@@ -57,7 +108,6 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 @app.route("/api/upload", methods=["POST"])
 def upload():
-    """Reçoit un fichier, extrait son contenu et le retourne."""
     if "file" not in request.files:
         return {"error": "Aucun fichier reçu."}, 400
 
@@ -67,7 +117,6 @@ def upload():
 
     filename = f.filename
     ext = os.path.splitext(filename)[1].lower()
-    size = 0
     try:
         file_bytes = f.read()
         size = len(file_bytes)
@@ -81,7 +130,7 @@ def upload():
         try:
             reader = PdfReader(io.BytesIO(file_bytes))
             pages_text = []
-            for i, page in enumerate(reader.pages[:50]):  # 50 pages max
+            for i, page in enumerate(reader.pages[:50]):
                 try:
                     pages_text.append(page.extract_text() or "")
                 except Exception:
@@ -93,7 +142,7 @@ def upload():
                 "type": "text",
                 "filename": filename,
                 "size": size,
-                "content": text[:50000],  # 50k chars max
+                "content": text[:50000],
                 "truncated": len(text) > 50000,
             }
         except Exception as e:
@@ -125,19 +174,26 @@ def upload():
             ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp",
         }.get(ext, "image/png")
         b64 = base64.b64encode(file_bytes).decode("ascii")
+        data_url = f"data:{mime};base64,{b64}"
+
+        # 🔑 CONVERSION AUTOMATIQUE EN TEXTE (invisible pour l'utilisateur)
+        description = _describe_image(data_url)
+        print(f"[NOVA][UPLOAD IMAGE] {filename} | desc = {description[:100]}...", flush=True)
+
         return {
             "type": "image",
             "filename": filename,
             "size": size,
             "mime": mime,
-            "data_url": f"data:{mime};base64,{b64}",
+            "data_url": data_url,
+            "description": description,   # <- description cachée
         }
 
     return {"error": f"Type de fichier non supporté : {ext or '?'}"}, 400
 
 
 # ============================================================
-# ROUTE CHAT (avec support des fichiers joints)
+# ROUTE CHAT (avec support des fichiers joints + descriptions)
 # ============================================================
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -150,7 +206,7 @@ def chat():
     messages = data.get("messages", [])
     mode = data.get("mode", "moyen")
     config = data.get("config", {})
-    attachments = data.get("attachments", [])  # liste de fichiers joints au dernier message
+    attachments = data.get("attachments", [])
 
     cfg = MODES.get(mode, MODES["moyen"])
     ai_name = config.get("aiName", "NOVA")
@@ -167,11 +223,9 @@ def chat():
         f"{cfg['suffix']} Nous sommes le {date_str}."
     )
 
-    # Détecte si au moins un fichier joint est une image -> utilise le modèle vision
     has_image = any(a.get("type") == "image" for a in attachments)
     model = MODEL_VISION if has_image else MODEL_CHAT
 
-    # Construit les messages : derniers 20 + injection des fichiers joints au dernier message
     trimmed = messages[-20:] if len(messages) > 20 else messages[:]
     final_messages = [{"role": "system", "content": system_prompt}]
 
@@ -179,7 +233,6 @@ def chat():
         is_last_user = (idx == len(trimmed) - 1 and m.get("role") == "user")
 
         if is_last_user and attachments:
-            # Construit un contenu multimodal
             content_parts = []
             if m.get("content"):
                 content_parts.append({"type": "text", "text": m["content"]})
@@ -194,6 +247,17 @@ def chat():
                         )
                     })
                 elif att.get("type") == "image":
+                    # Texte "caché" : description générée à l'upload
+                    desc = att.get("description") or att.get("_description")
+                    if desc:
+                        content_parts.append({
+                            "type": "text",
+                            "text": (
+                                f"\n\n[Description automatique de l'image "
+                                f"« {att.get('filename','image')} » : {desc}]\n"
+                            )
+                        })
+                    # L'image elle-même pour la vision
                     content_parts.append({
                         "type": "image_url",
                         "image_url": {"url": att.get("data_url", "")}
@@ -201,8 +265,10 @@ def chat():
 
             final_messages.append({"role": "user", "content": content_parts})
         else:
-            # Message normal (texte simple)
-            final_messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+            final_messages.append({
+                "role": m.get("role", "user"),
+                "content": m.get("content", "")
+            })
 
     payload = {
         "model": model,
@@ -249,6 +315,46 @@ def chat():
 # ============================================================
 # GÉNÉRATION D'IMAGES — Job + Polling
 # ============================================================
+
+def _save_image_result(job_id, r):
+    """Extrait l'image de la reponse NVIDIA et met a jour le job."""
+    result = r.json()
+    image_url = None
+
+    artifacts = result.get("artifacts") or []
+    if artifacts and isinstance(artifacts[0], dict):
+        art = artifacts[0]
+        reason = art.get("finishReason") or art.get("finish_reason")
+        if reason == "CONTENT_FILTERED":
+            IMAGE_JOBS[job_id]["status"] = "error"
+            IMAGE_JOBS[job_id]["error"] = (
+                "🚫 Description bloquée par le filtre NVIDIA. Reformule sans éléments sensibles."
+            )
+            return
+
+    if result.get("image"):
+        img = result["image"]
+        image_url = img if img.startswith("data:") else "data:image/png;base64," + img
+    else:
+        if artifacts and isinstance(artifacts[0], dict):
+            art = artifacts[0]
+            if art.get("base64"):
+                image_url = "data:image/png;base64," + art["base64"]
+            elif art.get("url"):
+                image_url = art["url"]
+
+    if not image_url:
+        print(f"[NOVA][IMAGE FORMAT INCONNU] {str(result)[:300]}", flush=True)
+        IMAGE_JOBS[job_id]["status"] = "error"
+        IMAGE_JOBS[job_id]["error"] = "Format de réponse inconnu."
+        return
+
+    IMAGE_JOBS[job_id]["status"] = "done"
+    IMAGE_JOBS[job_id]["progress"] = 100
+    IMAGE_JOBS[job_id]["image"] = image_url
+    print(f"[NOVA][IMAGE OK] job {job_id}", flush=True)
+
+
 def _run_image_job(job_id, prompt):
     try:
         IMAGE_JOBS[job_id]["status"] = "generating"
@@ -279,41 +385,7 @@ def _run_image_job(job_id, prompt):
             IMAGE_JOBS[job_id]["error"] = f"API {r.status_code}: {err_full[:200]}"
             return
 
-        result = r.json()
-        image_url = None
-
-        artifacts = result.get("artifacts") or []
-        if artifacts and isinstance(artifacts[0], dict):
-            art = artifacts[0]
-            reason = art.get("finishReason") or art.get("finish_reason")
-            if reason == "CONTENT_FILTERED":
-                IMAGE_JOBS[job_id]["status"] = "error"
-                IMAGE_JOBS[job_id]["error"] = (
-                    "🚫 Description bloquée par le filtre NVIDIA. Reformule sans éléments sensibles."
-                )
-                return
-
-        if result.get("image"):
-            img = result["image"]
-            image_url = img if img.startswith("data:") else "data:image/png;base64," + img
-        else:
-            if artifacts and isinstance(artifacts[0], dict):
-                art = artifacts[0]
-                if art.get("base64"):
-                    image_url = "data:image/png;base64," + art["base64"]
-                elif art.get("url"):
-                    image_url = art["url"]
-
-        if not image_url:
-            print(f"[NOVA][IMAGE FORMAT INCONNU] {str(result)[:300]}", flush=True)
-            IMAGE_JOBS[job_id]["status"] = "error"
-            IMAGE_JOBS[job_id]["error"] = "Format de réponse inconnu."
-            return
-
-        IMAGE_JOBS[job_id]["status"] = "done"
-        IMAGE_JOBS[job_id]["progress"] = 100
-        IMAGE_JOBS[job_id]["image"] = image_url
-        print(f"[NOVA][IMAGE OK] job {job_id}", flush=True)
+        _save_image_result(job_id, r)
 
     except Exception as e:
         print(f"[NOVA][EXCEPTION IMAGE] {e}", flush=True)
@@ -327,7 +399,21 @@ def image_start():
         return {"error": "Cle API manquante."}, 500
     data = request.get_json() or {}
     prompt = (data.get("prompt") or "").strip()
-    if not prompt:
+    # 🔑 Description d'image eventuelle (generee a l'upload)
+    reference_description = (data.get("reference_description") or "").strip()
+
+    # 🔑 On combine : prompt utilisateur + description cachee de l'image
+    if reference_description:
+        combined = (
+            f"{prompt}\n\n"
+            f"[Style et contenu inspirés de l'image de référence : {reference_description}]"
+            if prompt else
+            f"Crée une image inspirée de cette description : {reference_description}"
+        )
+    else:
+        combined = prompt
+
+    if not combined.strip():
         return {"error": "Prompt vide."}, 400
 
     job_id = str(uuid.uuid4())
@@ -335,7 +421,7 @@ def image_start():
         "status": "pending", "progress": 0,
         "image": None, "error": None, "created": time.time(),
     }
-    threading.Thread(target=_run_image_job, args=(job_id, prompt), daemon=True).start()
+    threading.Thread(target=_run_image_job, args=(job_id, combined), daemon=True).start()
 
     now = time.time()
     for k in list(IMAGE_JOBS.keys()):
