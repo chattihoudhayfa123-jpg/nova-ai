@@ -12,9 +12,9 @@ NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
 MODES = {
-    "faible": {"max_tokens": 2500, "temperature": 0.3, "suffix": " Reponds de facon concise."},
-    "moyen":  {"max_tokens": 3000, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
-    "max":    {"max_tokens": 5000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
+    "faible": {"max_tokens": 1000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
+    "moyen":  {"max_tokens": 2500, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
+    "max":    {"max_tokens": 4000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
 }
 
 
