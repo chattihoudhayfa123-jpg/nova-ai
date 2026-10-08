@@ -33,26 +33,146 @@ MODES = {
     "max":    {"max_tokens": 8000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
 }
 
-# ============================================================
-# MODÈLE TEXTE (un seul, confirmé fonctionnel)
-# ============================================================
-TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
+# Modèles par défaut (seront écrasés par le catalogue dynamique)
+DEFAULT_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
+DEFAULT_IMAGE_MODEL = "black-forest-labs/flux.2-klein-4b"
 
-# ============================================================
-# MODÈLE VISION (pour décrire les images)
-# ============================================================
-VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
+# Catalogue dynamique (rempli au démarrage)
+TEXT_MODELS = {}
+IMAGE_MODELS = {}
+ACTIVE_TEXT_MODEL = DEFAULT_TEXT_MODEL
+ACTIVE_IMAGE_MODEL = DEFAULT_IMAGE_MODEL
 
-# ============================================================
-# MODÈLE IMAGE (un seul, confirmé fonctionnel)
-# ============================================================
-IMAGE_MODEL_ENDPOINT = f"{NVIDIA_IMAGE_BASE}/black-forest-labs/flux.2-klein-4b"
 FLUX_MAX_PROMPT_LEN = 780
-
 CONNECT_TIMEOUT = 15
 READ_TIMEOUT = 120
 
 IMAGE_JOBS = {}
+
+
+# ============================================================
+# CATALOGUE DYNAMIQUE
+# ============================================================
+def _classify_model(model_id):
+    """Détermine si un modèle est pour le chat ou pour l'image."""
+    mid = model_id.lower()
+    # Mots-clés pour les modèles de génération d'image
+    image_keywords = ["flux", "diffusion", "sdxl", "dall", "genai", "image"]
+    for kw in image_keywords:
+        if kw in mid:
+            return "image"
+    # Mots-clés pour les modèles de chat/texte
+    chat_keywords = ["instruct", "chat", "llm", "nemotron", "llama", "qwen", "mistral", "gemma", "deepseek", "phi", "command", "yi", "solar", "zephyr", "vicuna", "falcon", "mpt", "olmo"]
+    for kw in chat_keywords:
+        if kw in mid:
+            return "chat"
+    return "other"
+
+
+def fetch_nvidia_models():
+    """Interroge l'endpoint /v1/models de NVIDIA et construit le catalogue."""
+    global TEXT_MODELS, IMAGE_MODELS
+    if not NVIDIA_API_KEY:
+        print("[NOVA] Pas de clé API, catalogue vide.", flush=True)
+        return
+    try:
+        r = requests.get(
+            f"{NVIDIA_BASE}/models",
+            headers={"Authorization": f"Bearer {NVIDIA_API_KEY}", "Accept": "application/json"},
+            timeout=(10, 30)
+        )
+        if r.status_code != 200:
+            print(f"[NOVA] Erreur /v1/models : {r.status_code} -> {r.text[:200]}", flush=True)
+            return
+        data = r.json()
+        models = data.get("data", []) if isinstance(data, dict) else []
+        print(f"[NOVA] {len(models)} modèles récupérés depuis NVIDIA.", flush=True)
+
+        text_models = {}
+        image_models = {}
+
+        for m in models:
+            mid = m.get("id", "")
+            if not mid:
+                continue
+            kind = _classify_model(mid)
+            entry = {
+                "id": mid,
+                "name": mid.split("/")[-1].replace("-", " ").title(),
+                "provider": mid.split("/")[0].title() if "/" in mid else "NVIDIA",
+                "description": f"Modèle disponible via l'API NVIDIA.",
+                "queue": "Variable",
+                "speed": "Variable",
+                "efficiency": "Variable",
+                "best_for": "Dépend du modèle",
+                "default": False,
+                "endpoint": mid, # Pour l'image, on construira l'URL complète
+                "payload_format": "flux" # Par défaut pour l'image
+            }
+            if kind == "chat":
+                text_models[mid] = entry
+            elif kind == "image":
+                entry["endpoint"] = f"{NVIDIA_IMAGE_BASE}/{mid}"
+                image_models[mid] = entry
+
+        if text_models:
+            TEXT_MODELS = text_models
+            # Met à jour le modèle actif si celui par défaut n'existe plus
+            if ACTIVE_TEXT_MODEL not in TEXT_MODELS:
+                ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
+        if image_models:
+            IMAGE_MODELS = image_models
+            if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS:
+                ACTIVE_IMAGE_MODEL = next(iter(IMAGE_MODELS))
+
+        print(f"[NOVA] Catalogue : {len(TEXT_MODELS)} modèles texte, {len(IMAGE_MODELS)} modèles image.", flush=True)
+    except Exception as e:
+        print(f"[NOVA] Exception /v1/models : {e}", flush=True)
+
+
+# Appel au démarrage
+fetch_nvidia_models()
+
+
+# ============================================================
+# ROUTES CATALOGUE
+# ============================================================
+@app.route("/api/models", methods=["GET"])
+def get_models():
+    return jsonify({
+        "text_models": list(TEXT_MODELS.values()),
+        "image_models": list(IMAGE_MODELS.values()),
+        "active_text_model": ACTIVE_TEXT_MODEL,
+        "active_image_model": ACTIVE_IMAGE_MODEL,
+    })
+
+
+@app.route("/api/models/select", methods=["POST"])
+def select_model():
+    global ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
+    data = request.get_json() or {}
+    model_type = data.get("type", "text")
+    model_id = data.get("model_id", "")
+
+    if model_type == "text":
+        if model_id not in TEXT_MODELS:
+            return {"error": "Modèle texte inconnu."}, 400
+        ACTIVE_TEXT_MODEL = model_id
+        print(f"[NOVA] Modèle texte actif : {ACTIVE_TEXT_MODEL}", flush=True)
+        return {"ok": True, "active": ACTIVE_TEXT_MODEL}
+    elif model_type == "image":
+        if model_id not in IMAGE_MODELS:
+            return {"error": "Modèle image inconnu."}, 400
+        ACTIVE_IMAGE_MODEL = model_id
+        print(f"[NOVA] Modèle image actif : {ACTIVE_IMAGE_MODEL}", flush=True)
+        return {"ok": True, "active": ACTIVE_IMAGE_MODEL}
+    return {"error": "Type inconnu."}, 400
+
+
+@app.route("/api/models/refresh", methods=["POST"])
+def refresh_models():
+    fetch_nvidia_models()
+    return {"ok": True, "text_count": len(TEXT_MODELS), "image_count": len(IMAGE_MODELS)}
 
 
 # ============================================================
@@ -153,7 +273,7 @@ def chat():
     )
 
     has_image = any(a.get("type") == "image" for a in attachments)
-    model = VISION_MODEL if has_image else TEXT_MODEL
+    model = VISION_MODEL if has_image else ACTIVE_TEXT_MODEL
 
     trimmed = messages[-20:] if len(messages) > 20 else messages[:]
     final_messages = [{"role": "system", "content": system_prompt}]
@@ -237,7 +357,7 @@ def chat():
 
 
 # ============================================================
-# UPLOAD
+# UPLOAD (inchangé)
 # ============================================================
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".markdown", ".csv", ".json", ".xml", ".html", ".htm",
@@ -320,7 +440,7 @@ def upload():
 
 
 # ============================================================
-# GÉNÉRATION D'IMAGES
+# GÉNÉRATION D'IMAGES (dynamique selon le modèle choisi)
 # ============================================================
 def _save_image_result(job_id, r):
     result = r.json()
@@ -370,13 +490,33 @@ def _run_image_job(job_id, user_prompt):
         IMAGE_JOBS[job_id]["status"] = "generating"
         IMAGE_JOBS[job_id]["progress"] = 30
 
-        payload = {
-            "prompt": final_prompt,
-            "width": 1024,
-            "height": 1024,
-            "steps": 4,
-            "seed": 0,
-        }
+        # Récupère le modèle actif
+        model_info = IMAGE_MODELS.get(ACTIVE_IMAGE_MODEL)
+        if not model_info:
+            IMAGE_JOBS[job_id]["status"] = "error"
+            IMAGE_JOBS[job_id]["error"] = "Aucun modèle image actif."
+            return
+
+        endpoint = model_info["endpoint"]
+        payload_format = model_info.get("payload_format", "flux")
+
+        if payload_format == "sdxl":
+            payload = {
+                "text_prompts": [{"text": final_prompt}],
+                "cfg_scale": 5.0,
+                "seed": 0,
+                "steps": 30,
+                "width": 1024,
+                "height": 1024,
+            }
+        else:
+            payload = {
+                "prompt": final_prompt,
+                "width": 1024,
+                "height": 1024,
+                "steps": 4,
+                "seed": 0,
+            }
 
         headers = {
             "Authorization": f"Bearer {NVIDIA_API_KEY}",
@@ -384,7 +524,7 @@ def _run_image_job(job_id, user_prompt):
             "Content-Type": "application/json",
         }
 
-        r = requests.post(IMAGE_MODEL_ENDPOINT, json=payload, headers=headers, timeout=(20, 300))
+        r = requests.post(endpoint, json=payload, headers=headers, timeout=(20, 300))
         IMAGE_JOBS[job_id]["progress"] = 85
 
         if r.status_code != 200:
@@ -451,9 +591,10 @@ def debug():
         "key_present": bool(NVIDIA_API_KEY),
         "key_length": len(NVIDIA_API_KEY),
         "key_valid": NVIDIA_API_KEY.startswith("nvapi-") and len(NVIDIA_API_KEY) > 50,
-        "text_model": TEXT_MODEL,
-        "vision_model": VISION_MODEL,
-        "image_endpoint": IMAGE_MODEL_ENDPOINT,
+        "text_models_count": len(TEXT_MODELS),
+        "image_models_count": len(IMAGE_MODELS),
+        "active_text_model": ACTIVE_TEXT_MODEL,
+        "active_image_model": ACTIVE_IMAGE_MODEL,
         "pypdf_ok": PYPDF_OK,
     }
 
@@ -468,8 +609,6 @@ def static_files(filename):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"[NOVA] Cle API : {len(NVIDIA_API_KEY)} chars", flush=True)
-    print(f"[NOVA] Chat   : {TEXT_MODEL}", flush=True)
-    print(f"[NOVA] Vision : {VISION_MODEL}", flush=True)
-    print(f"[NOVA] Image  : {IMAGE_MODEL_ENDPOINT}", flush=True)
-    print(f"[NOVA] pypdf  : {PYPDF_OK}", flush=True)
+    print(f"[NOVA] Modèles texte : {len(TEXT_MODELS)}", flush=True)
+    print(f"[NOVA] Modèles image : {len(IMAGE_MODELS)}", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)
