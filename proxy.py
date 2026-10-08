@@ -25,6 +25,15 @@ NVIDIA_CHAT_URL = f"{NVIDIA_BASE}/chat/completions"
 NVIDIA_IMAGE_BASE = "https://ai.api.nvidia.com/v1/genai"
 
 # ============================================================
+# MODES DE RÉPONSE (faible / moyen / max)
+# ============================================================
+MODES = {
+    "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
+    "moyen":  {"max_tokens": 4000, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
+    "max":    {"max_tokens": 8000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
+}
+
+# ============================================================
 # CATALOGUE DES MODÈLES (TEXTE)
 # ============================================================
 TEXT_MODELS = {
@@ -184,10 +193,19 @@ IMAGE_MODELS = {
 ACTIVE_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
 ACTIVE_IMAGE_MODEL = "black-forest-labs/flux.2-klein-4b"
 
+# Limite DURE de l'API FLUX.2 pour le prompt : 800 caractères
+FLUX_MAX_PROMPT_LEN = 780
+
+CONNECT_TIMEOUT = 15
+READ_TIMEOUT = 120
+
+IMAGE_JOBS = {}
+
+
 # ============================================================
 # UTILITAIRES
 # ============================================================
-def _truncate_prompt(prompt, max_len=780):
+def _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN):
     prompt = (prompt or "").strip()
     if len(prompt) <= max_len:
         return prompt
@@ -255,7 +273,6 @@ def _describe_image(data_url, max_words=250):
 # ============================================================
 @app.route("/api/models", methods=["GET"])
 def get_models():
-    """Retourne la liste des modèles texte et image disponibles."""
     return jsonify({
         "text_models": list(TEXT_MODELS.values()),
         "image_models": list(IMAGE_MODELS.values()),
@@ -266,7 +283,6 @@ def get_models():
 
 @app.route("/api/models/select", methods=["POST"])
 def select_model():
-    """Change le modèle actif."""
     global ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
     data = request.get_json() or {}
     model_type = data.get("type", "text")
@@ -377,7 +393,7 @@ def chat():
     def generate():
         try:
             with requests.post(NVIDIA_CHAT_URL, json=payload, headers=headers,
-                               stream=True, timeout=(15, 120)) as r:
+                               stream=True, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)) as r:
                 if r.status_code != 200:
                     err = r.text[:300].replace('"', "'").replace("\n", " ")
                     print(f"[NOVA][ERREUR CHAT] {r.status_code} -> {err}", flush=True)
@@ -529,7 +545,7 @@ def _save_image_result(job_id, r):
 def _run_image_job(job_id, user_prompt):
     try:
         final_prompt = user_prompt.strip() if user_prompt.strip() else "a beautiful abstract art piece"
-        final_prompt = _truncate_prompt(final_prompt, max_len=780)
+        final_prompt = _truncate_prompt(final_prompt, max_len=FLUX_MAX_PROMPT_LEN)
 
         print(f"[NOVA][IMG] prompt ({len(final_prompt)} chars) : {final_prompt[:150]}", flush=True)
 
