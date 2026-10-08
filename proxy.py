@@ -32,7 +32,7 @@ MODEL_VISION = os.environ.get("NVIDIA_MODEL_VISION", "meta/llama-3.2-11b-vision-
 NVIDIA_IMAGE_URL = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.2-klein-4b"
 
 # Limite DURE de l'API FLUX.2 pour le prompt : 800 caractères
-FLUX_MAX_PROMPT_LEN = 780   # marge de sécurité
+FLUX_MAX_PROMPT_LEN = 780
 
 MODES = {
     "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
@@ -47,13 +47,9 @@ IMAGE_JOBS = {}
 
 
 # ============================================================
-# HELPERS — TRONCATURE INTELLIGENTE
+# TRONCATURE INTELLIGENTE
 # ============================================================
 def _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN):
-    """
-    Tronque intelligemment un prompt a max_len caracteres.
-    Cherche la derniere ponctuation/space propre pour ne pas couper en plein mot.
-    """
     prompt = (prompt or "").strip()
     if len(prompt) <= max_len:
         return prompt
@@ -66,44 +62,32 @@ def _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN):
 
 
 # ============================================================
-# HELPERS — DESCRIPTION ULTRA-DÉTAILLÉE D'IMAGE (VISION)
+# DESCRIPTION D'IMAGE — VERSION 100% NEUTRE ET SAFE
 # ============================================================
-def _describe_image(data_url, max_words=400):
+def _describe_image(data_url, max_words=250):
     """
-    Envoie l'image au modele vision et retourne une description ULTRA detaillee.
+    Description purement visuelle et neutre.
+    AUCUN element susceptible de declencher le guardrail NVIDIA :
+    - pas de personnes / visages / ages / sexes
+    - pas de violence / armes / sang
+    - pas de marques / logos / celebrites
+    - pas de contenu adulte ou suggestif
     """
     if not NVIDIA_API_KEY or not data_url:
         return ""
     try:
         prompt = (
-            "Tu es un système de vision par ordinateur ultra-précis. "
-            "Analyse cette image en profondeur et décris-la de manière EXTRÊMEMENT détaillée "
-            "en français, comme si tu devais la faire 'voir' à une personne aveugle ou "
-            "à une IA de génération d'image qui doit la reproduire fidèlement.\n\n"
-            "Structure ta description dans cet ordre :\n\n"
-            "1. **SUJET PRINCIPAL** : Que voit-on au premier plan ? "
-            "Décris précisément chaque être humain (âge approximatif, sexe, expression du visage, "
-            "posture, vêtements et couleurs), animal, ou objet. Position exacte dans le cadre "
-            "(centre, à gauche, en haut...).\n\n"
-            "2. **ARRIÈRE-PLAN** : Que voit-on derrière ? Paysage, intérieur, mur, ciel, foule... "
-            "Décris chaque élément visible et sa position.\n\n"
-            "3. **COULEURS** : Liste les couleurs dominantes avec leurs teintes précises "
-            "(ex: bleu ciel pastel, rouge carmin vif, vert émeraude sombre...). "
-            "Indique les dégradés, les contrastes, les zones monochromes.\n\n"
-            "4. **LUMIÈRE ET OMBRES** : D'où vient la lumière ? Douce, dure, naturelle, artificielle ? "
-            "Ombres portées, reflets, contre-jour, néons, coucher de soleil ?\n\n"
-            "5. **STYLE ARTISTIQUE** : Photo réaliste, dessin animé, peinture à l'huile, "
-            "aquarelle, 3D, pixel art, manga, cinématographique, vintage, minimaliste ? "
-            "Précise la technique et l'ambiance visuelle.\n\n"
-            "6. **COMPOSITION** : Cadrage (gros plan, plan large, portrait, paysage), "
-            "angle de vue (frontal, plongée, contre-plongée), règle des tiers, symétrie.\n\n"
-            "7. **TEXTURES ET DÉTAILS FINS** : Matières (tissu, métal, bois, peau, verre...), "
-            "petits détails visibles (objets au sol, motifs, écritures, logos, bijoux...).\n\n"
-            "8. **AMBIANCE ET ÉMOTION** : Quelle émotion se dégage ? Joyeux, triste, "
-            "mystérieux, dramatique, apaisant, énergique ?\n\n"
-            "9. **TEXTE DANS L'IMAGE** : S'il y a du texte visible, transcris-le mot pour mot.\n\n"
-            f"Sois exhaustif et précis. Maximum {max_words} mots. "
-            "Réponds UNIQUEMENT par la description structurée, sans introduction ni conclusion."
+            "Décris cette image de façon purement visuelle, neutre et positive, "
+            "en français, comme pour un prompt de génération d'image artistique.\n\n"
+            "Décris UNIQUEMENT :\n"
+            "- Les formes et objets visibles (sans nommer de personne réelle)\n"
+            "- Les couleurs dominantes et leurs nuances\n"
+            "- Le style visuel (photo, illustration, peinture, 3D, dessin...)\n"
+            "- L'ambiance générale (lumineuse, sombre, chaleureuse, froide...)\n"
+            "- Les éléments de décor (objets, textures, arrière-plan)\n\n"
+            f"Maximum {max_words} mots. Sois descriptif mais neutre et positif. "
+            "Ne mentionne NI personne, NI visage, NI émotion, NI marque, NI texte. "
+            "Réponds uniquement par la description."
         )
         payload = {
             "model": MODEL_VISION,
@@ -116,7 +100,7 @@ def _describe_image(data_url, max_words=400):
             }],
             "temperature": 0.2,
             "top_p": 0.9,
-            "max_tokens": 800,
+            "max_tokens": 500,
             "stream": False,
         }
         headers = {
@@ -222,7 +206,6 @@ def upload():
         b64 = base64.b64encode(file_bytes).decode("ascii")
         data_url = f"data:{mime};base64,{b64}"
 
-        # 🔑 CONVERSION AUTOMATIQUE EN TEXTE ULTRA-DÉTAILLÉ (invisible pour l'utilisateur)
         description = _describe_image(data_url)
         print(f"[NOVA][UPLOAD IMAGE] {filename} | desc = {description[:100]}...", flush=True)
 
@@ -239,7 +222,7 @@ def upload():
 
 
 # ============================================================
-# ROUTE CHAT (avec support des fichiers joints + descriptions)
+# ROUTE CHAT
 # ============================================================
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -298,8 +281,8 @@ def chat():
                         content_parts.append({
                             "type": "text",
                             "text": (
-                                f"\n\n[Analyse automatique détaillée de l'image "
-                                f"« {att.get('filename','image')} » :\n{desc}\n]\n"
+                                f"\n\n[Description de l'image "
+                                f"« {att.get('filename','image')} » : {desc}]\n"
                             )
                         })
                     content_parts.append({
@@ -357,11 +340,10 @@ def chat():
 
 
 # ============================================================
-# GÉNÉRATION D'IMAGES — Job + Polling
+# GÉNÉRATION D'IMAGES — version SAFE, sans elements sensibles
 # ============================================================
 
 def _save_image_result(job_id, r):
-    """Extrait l'image de la reponse NVIDIA et met a jour le job."""
     result = r.json()
     image_url = None
 
@@ -372,7 +354,8 @@ def _save_image_result(job_id, r):
         if reason == "CONTENT_FILTERED":
             IMAGE_JOBS[job_id]["status"] = "error"
             IMAGE_JOBS[job_id]["error"] = (
-                "🚫 Description bloquée par le filtre NVIDIA. Reformule sans éléments sensibles."
+                "🚫 Description bloquée par le filtre de sécurité NVIDIA. "
+                "Essaie un prompt simple et neutre (paysage, objet, animal...)."
             )
             return
 
@@ -399,79 +382,47 @@ def _save_image_result(job_id, r):
     print(f"[NOVA][IMAGE OK] job {job_id}", flush=True)
 
 
-def _run_image_job(job_id, prompt, fallback_prompt=None):
+def _run_image_job(job_id, user_prompt, reference_description=""):
     """
-    prompt : le prompt complet (avec description)
-    fallback_prompt : version simplifiee (prompt utilisateur seul) si le 1er est filtre
+    Strategie SAFE : on n'utilise QUE le prompt utilisateur.
+    La description de l'image n'est JAMAIS envoyee au generateur d'image
+    (elle sert uniquement au chat). Cela evite les blocages du guardrail.
     """
     try:
+        # On prend uniquement le prompt utilisateur, tronque
+        final_prompt = user_prompt.strip() if user_prompt.strip() else "a beautiful abstract art piece"
+        final_prompt = _truncate_prompt(final_prompt, max_len=FLUX_MAX_PROMPT_LEN)
+
+        print(f"[NOVA][IMG] prompt ({len(final_prompt)} chars) : {final_prompt[:150]}", flush=True)
+
+        IMAGE_JOBS[job_id]["status"] = "generating"
+        IMAGE_JOBS[job_id]["progress"] = 30
+
+        payload = {
+            "prompt": final_prompt,
+            "width": 1024,
+            "height": 1024,
+            "steps": 4,
+            "seed": 0
+        }
         headers = {
             "Authorization": f"Bearer {NVIDIA_API_KEY}",
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
 
-        def try_generate(p, label):
-            p = _truncate_prompt(p, max_len=FLUX_MAX_PROMPT_LEN)
-            payload = {
-                "prompt": p,
-                "width": 1024,
-                "height": 1024,
-                "steps": 4,
-                "seed": 0
-            }
-            print(f"[NOVA][IMAGE {label}] prompt ({len(p)} chars) : {p[:120]}...", flush=True)
-            r = requests.post(NVIDIA_IMAGE_URL, json=payload, headers=headers,
-                              timeout=(20, 300))
-            return r
+        r = requests.post(NVIDIA_IMAGE_URL, json=payload, headers=headers,
+                          timeout=(20, 300))
+        IMAGE_JOBS[job_id]["progress"] = 85
 
-        def is_filtered(r):
-            if r.status_code != 200:
-                return False
-            try:
-                result = r.json()
-                artifacts = result.get("artifacts") or []
-                if artifacts and isinstance(artifacts[0], dict):
-                    reason = artifacts[0].get("finishReason") or artifacts[0].get("finish_reason")
-                    return reason == "CONTENT_FILTERED"
-            except Exception:
-                pass
-            return False
-
-        # --- 1er essai : prompt complet ---
-        IMAGE_JOBS[job_id]["status"] = "generating"
-        IMAGE_JOBS[job_id]["progress"] = 20
-
-        r = try_generate(prompt, "COMPLET")
-        IMAGE_JOBS[job_id]["progress"] = 70
-
-        if r.status_code == 200 and not is_filtered(r):
-            _save_image_result(job_id, r)
+        if r.status_code != 200:
+            err_full = r.text[:500]
+            print(f"[NOVA][ERREUR IMAGE] {r.status_code} -> {err_full}", flush=True)
+            IMAGE_JOBS[job_id]["status"] = "error"
+            IMAGE_JOBS[job_id]["error"] = f"API {r.status_code}: {err_full[:200]}"
             return
 
-        if is_filtered(r):
-            print(f"[NOVA][IMAGE] Filtre sur prompt complet -> retry simplifie", flush=True)
-        else:
-            err = r.text[:300]
-            print(f"[NOVA][IMAGE] Erreur {r.status_code} sur prompt complet : {err}", flush=True)
-
-        # --- 2e essai : fallback simplifie ---
-        if fallback_prompt and fallback_prompt.strip() and fallback_prompt.strip() != prompt.strip():
-            print(f"[NOVA][IMAGE] Tentative fallback : {fallback_prompt[:80]}...", flush=True)
-            r2 = try_generate(fallback_prompt, "FALLBACK")
-            IMAGE_JOBS[job_id]["progress"] = 85
-            if r2.status_code == 200 and not is_filtered(r2):
-                _save_image_result(job_id, r2)
-                return
-            print(f"[NOVA][IMAGE] Fallback egalement filtre ou en erreur", flush=True)
-
-        # --- Echec total ---
-        IMAGE_JOBS[job_id]["status"] = "error"
-        IMAGE_JOBS[job_id]["error"] = (
-            "🚫 Ta demande a été bloquée par le filtre de sécurité NVIDIA. "
-            "Essaie de reformuler ton prompt en évitant tout élément sensible "
-            "(personnes, violence, marques, contenu adulte...)."
-        )
+        _save_image_result(job_id, r)
 
     except Exception as e:
         print(f"[NOVA][EXCEPTION IMAGE] {e}", flush=True)
@@ -484,45 +435,27 @@ def image_start():
     if not NVIDIA_API_KEY:
         return {"error": "Cle API manquante."}, 500
     data = request.get_json() or {}
-    prompt = (data.get("prompt") or "").strip()
+    user_prompt = (data.get("prompt") or "").strip()
     reference_description = (data.get("reference_description") or "").strip()
 
-    # 🔑 On prepare DEUX prompts :
-    # 1) complet = prompt utilisateur + description ultra-detaillee (pour les images claires)
-    # 2) fallback = prompt utilisateur seul (si le complet est filtre)
-    MAX = FLUX_MAX_PROMPT_LEN
-
-    if reference_description and prompt:
-        user_part = prompt.strip()
-        remaining = MAX - len(user_part) - 30
-        if remaining > 100:
-            desc_part = reference_description[:remaining].rstrip()
-            combined = f"{user_part}\nContexte visuel : {desc_part}"
-        else:
-            combined = user_part
-    elif reference_description:
-        combined = reference_description[:MAX].rstrip()
-    else:
-        combined = prompt.strip()
-
-    combined = _truncate_prompt(combined, max_len=MAX)
-
-    # Fallback = prompt utilisateur seul (sans description), tronque
-    fallback = _truncate_prompt(prompt.strip(), max_len=MAX) if prompt.strip() else ""
-
-    if not combined.strip():
+    if not user_prompt and not reference_description:
         return {"error": "Prompt vide."}, 400
 
-    print(f"[NOVA][IMAGE START] complet={len(combined)} chars | fallback={len(fallback)} chars", flush=True)
+    # Si pas de prompt utilisateur, on prend un extrait neutre de la description
+    if not user_prompt:
+        user_prompt = reference_description[:200]
+
+    print(f"[NOVA][IMG START] prompt='{user_prompt[:80]}'", flush=True)
 
     job_id = str(uuid.uuid4())
     IMAGE_JOBS[job_id] = {
         "status": "pending", "progress": 0,
         "image": None, "error": None, "created": time.time(),
     }
+    # On N'ENVOIE PAS reference_description au job pour rester safe
     threading.Thread(
         target=_run_image_job,
-        args=(job_id, combined, fallback),
+        args=(job_id, user_prompt, ""),
         daemon=True
     ).start()
 
