@@ -58,10 +58,9 @@ def _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN):
     if len(prompt) <= max_len:
         return prompt
     cut = prompt[:max_len]
-    # Cherche le meilleur point de coupure (apres une ponctuation ou un espace)
     for sep in ['. ', '.\n', '! ', '? ', '; ', ', ', '\n', ' ']:
         idx = cut.rfind(sep)
-        if idx > max_len * 0.5:  # au moins 50% du texte garde
+        if idx > max_len * 0.5:
             return cut[:idx + len(sep)].rstrip() + '...'
     return cut.rstrip() + '...'
 
@@ -294,7 +293,6 @@ def chat():
                         )
                     })
                 elif att.get("type") == "image":
-                    # Description cachée ultra-détaillée
                     desc = att.get("description") or att.get("_description")
                     if desc:
                         content_parts.append({
@@ -304,7 +302,6 @@ def chat():
                                 f"« {att.get('filename','image')} » :\n{desc}\n]\n"
                             )
                         })
-                    # L'image elle-même pour la vision
                     content_parts.append({
                         "type": "image_url",
                         "image_url": {"url": att.get("data_url", "")}
@@ -402,44 +399,79 @@ def _save_image_result(job_id, r):
     print(f"[NOVA][IMAGE OK] job {job_id}", flush=True)
 
 
-def _run_image_job(job_id, prompt):
+def _run_image_job(job_id, prompt, fallback_prompt=None):
+    """
+    prompt : le prompt complet (avec description)
+    fallback_prompt : version simplifiee (prompt utilisateur seul) si le 1er est filtre
+    """
     try:
-        # 🔑 Tronque le prompt a la limite FLUX.2 (800 chars max)
-        original_len = len(prompt or "")
-        prompt = _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN)
-        if original_len > FLUX_MAX_PROMPT_LEN:
-            print(f"[NOVA][IMAGE] Prompt tronque : {original_len} -> {len(prompt)} chars", flush=True)
-        print(f"[NOVA][IMAGE] Prompt final ({len(prompt)} chars) : {prompt[:120]}...", flush=True)
-
-        IMAGE_JOBS[job_id]["status"] = "generating"
-        IMAGE_JOBS[job_id]["progress"] = 10
-
-        payload = {
-            "prompt": prompt,
-            "width": 1024,
-            "height": 1024,
-            "steps": 4,
-            "seed": 0
-        }
         headers = {
             "Authorization": f"Bearer {NVIDIA_API_KEY}",
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
 
-        IMAGE_JOBS[job_id]["progress"] = 30
-        r = requests.post(NVIDIA_IMAGE_URL, json=payload, headers=headers,
-                          timeout=(20, 300))
-        IMAGE_JOBS[job_id]["progress"] = 85
+        def try_generate(p, label):
+            p = _truncate_prompt(p, max_len=FLUX_MAX_PROMPT_LEN)
+            payload = {
+                "prompt": p,
+                "width": 1024,
+                "height": 1024,
+                "steps": 4,
+                "seed": 0
+            }
+            print(f"[NOVA][IMAGE {label}] prompt ({len(p)} chars) : {p[:120]}...", flush=True)
+            r = requests.post(NVIDIA_IMAGE_URL, json=payload, headers=headers,
+                              timeout=(20, 300))
+            return r
 
-        if r.status_code != 200:
-            err_full = r.text[:500]
-            print(f"[NOVA][ERREUR IMAGE] {r.status_code} -> {err_full}", flush=True)
-            IMAGE_JOBS[job_id]["status"] = "error"
-            IMAGE_JOBS[job_id]["error"] = f"API {r.status_code}: {err_full[:200]}"
+        def is_filtered(r):
+            if r.status_code != 200:
+                return False
+            try:
+                result = r.json()
+                artifacts = result.get("artifacts") or []
+                if artifacts and isinstance(artifacts[0], dict):
+                    reason = artifacts[0].get("finishReason") or artifacts[0].get("finish_reason")
+                    return reason == "CONTENT_FILTERED"
+            except Exception:
+                pass
+            return False
+
+        # --- 1er essai : prompt complet ---
+        IMAGE_JOBS[job_id]["status"] = "generating"
+        IMAGE_JOBS[job_id]["progress"] = 20
+
+        r = try_generate(prompt, "COMPLET")
+        IMAGE_JOBS[job_id]["progress"] = 70
+
+        if r.status_code == 200 and not is_filtered(r):
+            _save_image_result(job_id, r)
             return
 
-        _save_image_result(job_id, r)
+        if is_filtered(r):
+            print(f"[NOVA][IMAGE] Filtre sur prompt complet -> retry simplifie", flush=True)
+        else:
+            err = r.text[:300]
+            print(f"[NOVA][IMAGE] Erreur {r.status_code} sur prompt complet : {err}", flush=True)
+
+        # --- 2e essai : fallback simplifie ---
+        if fallback_prompt and fallback_prompt.strip() and fallback_prompt.strip() != prompt.strip():
+            print(f"[NOVA][IMAGE] Tentative fallback : {fallback_prompt[:80]}...", flush=True)
+            r2 = try_generate(fallback_prompt, "FALLBACK")
+            IMAGE_JOBS[job_id]["progress"] = 85
+            if r2.status_code == 200 and not is_filtered(r2):
+                _save_image_result(job_id, r2)
+                return
+            print(f"[NOVA][IMAGE] Fallback egalement filtre ou en erreur", flush=True)
+
+        # --- Echec total ---
+        IMAGE_JOBS[job_id]["status"] = "error"
+        IMAGE_JOBS[job_id]["error"] = (
+            "🚫 Ta demande a été bloquée par le filtre de sécurité NVIDIA. "
+            "Essaie de reformuler ton prompt en évitant tout élément sensible "
+            "(personnes, violence, marques, contenu adulte...)."
+        )
 
     except Exception as e:
         print(f"[NOVA][EXCEPTION IMAGE] {e}", flush=True)
@@ -455,39 +487,44 @@ def image_start():
     prompt = (data.get("prompt") or "").strip()
     reference_description = (data.get("reference_description") or "").strip()
 
-    # 🔑 Combine prompt utilisateur + description (avec PRIORITÉ au prompt utilisateur)
-    # FLUX.2 accepte max 800 caracteres -> on tronque intelligemment
+    # 🔑 On prepare DEUX prompts :
+    # 1) complet = prompt utilisateur + description ultra-detaillee (pour les images claires)
+    # 2) fallback = prompt utilisateur seul (si le complet est filtre)
     MAX = FLUX_MAX_PROMPT_LEN
 
     if reference_description and prompt:
-        # Prompt utilisateur d'abord (prioritaire), puis extrait de la description
         user_part = prompt.strip()
-        remaining = MAX - len(user_part) - 30  # -30 pour le separateur
+        remaining = MAX - len(user_part) - 30
         if remaining > 100:
             desc_part = reference_description[:remaining].rstrip()
             combined = f"{user_part}\nContexte visuel : {desc_part}"
         else:
-            combined = user_part  # pas assez de place, on garde que le prompt
+            combined = user_part
     elif reference_description:
-        # Pas de prompt utilisateur -> on prend le debut de la description
         combined = reference_description[:MAX].rstrip()
     else:
         combined = prompt.strip()
 
-    # Securite finale : troncature intelligente
     combined = _truncate_prompt(combined, max_len=MAX)
+
+    # Fallback = prompt utilisateur seul (sans description), tronque
+    fallback = _truncate_prompt(prompt.strip(), max_len=MAX) if prompt.strip() else ""
 
     if not combined.strip():
         return {"error": "Prompt vide."}, 400
 
-    print(f"[NOVA][IMAGE START] prompt final = {len(combined)} chars", flush=True)
+    print(f"[NOVA][IMAGE START] complet={len(combined)} chars | fallback={len(fallback)} chars", flush=True)
 
     job_id = str(uuid.uuid4())
     IMAGE_JOBS[job_id] = {
         "status": "pending", "progress": 0,
         "image": None, "error": None, "created": time.time(),
     }
-    threading.Thread(target=_run_image_job, args=(job_id, combined), daemon=True).start()
+    threading.Thread(
+        target=_run_image_job,
+        args=(job_id, combined, fallback),
+        daemon=True
+    ).start()
 
     now = time.time()
     for k in list(IMAGE_JOBS.keys()):
