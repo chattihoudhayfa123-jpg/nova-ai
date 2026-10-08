@@ -101,7 +101,7 @@ def chat():
     )
 
 # ============================================================
-# GÉNÉRATION D'IMAGES - Job + Polling (compatible free tier)
+# GÉNÉRATION D'IMAGES — Job + Polling (compatible free tier)
 # ============================================================
 
 def _run_image_job(job_id, prompt):
@@ -111,13 +111,13 @@ def _run_image_job(job_id, prompt):
         IMAGE_JOBS[job_id]["progress"] = 10
 
         # Payload spécifique pour FLUX.2-klein-4B
+        # ⚠️ NE PAS ajouter guidance_scale / cfg_scale → 422
         payload = {
             "prompt": prompt,
             "width": 1024,
             "height": 1024,
             "steps": 4,
-            "seed": 0,
-            "guidance_scale": 1.0
+            "seed": 0
         }
         headers = {
             "Authorization": f"Bearer {NVIDIA_API_KEY}",
