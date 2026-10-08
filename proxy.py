@@ -8,17 +8,23 @@ app = Flask(__name__)
 CORS(app)
 
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "").strip()
+
+# ====== CHAT ======
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 MODEL = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
 
-# Valeurs raisonnables pour un hebergement gratuit (Render free tier)
+# ====== IMAGE ======
+NVIDIA_IMAGE_URL = os.environ.get(
+    "NVIDIA_IMAGE_URL",
+    "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell"
+)
+
 MODES = {
     "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
     "moyen":  {"max_tokens": 4000, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
     "max":    {"max_tokens": 8000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
 }
 
-# Timeout : 15s connexion / 120s lecture (compatible free tier)
 CONNECT_TIMEOUT = int(os.environ.get("CONNECT_TIMEOUT", 15))
 READ_TIMEOUT = int(os.environ.get("READ_TIMEOUT", 120))
 
@@ -70,8 +76,7 @@ def chat():
                                stream=True, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)) as r:
                 if r.status_code != 200:
                     err_full = r.text[:500]
-                    # Log dans Render -> visible dans l'onglet Logs
-                    print(f"[NOVA][ERREUR NVIDIA] {r.status_code} -> {err_full}", flush=True)
+                    print(f"[NOVA][ERREUR NVIDIA CHAT] {r.status_code} -> {err_full}", flush=True)
                     err = err_full[:200].replace('"', "'").replace("\n", " ")
                     yield f'data: {{"error": "API {r.status_code}: {err}"}}\n\n'.encode()
                     return
@@ -79,10 +84,10 @@ def chat():
                     if line:
                         yield line + b"\n"
         except requests.exceptions.ReadTimeout:
-            print("[NOVA][TIMEOUT] Lecture depassee", flush=True)
+            print("[NOVA][TIMEOUT CHAT]", flush=True)
             yield b'data: {"error": "Delai depasse cote serveur."}\n\n'
         except Exception as e:
-            print(f"[NOVA][EXCEPTION] {e}", flush=True)
+            print(f"[NOVA][EXCEPTION CHAT] {e}", flush=True)
             err = str(e)[:200].replace('"', "'").replace("\n", " ")
             yield f'data: {{"error": "{err}"}}\n\n'.encode()
 
@@ -97,13 +102,82 @@ def chat():
     )
 
 
+# ============================================================
+# NOUVEAU : GENERATION D'IMAGES
+# ============================================================
+@app.route("/api/image", methods=["POST"])
+def image():
+    if not NVIDIA_API_KEY:
+        return {"error": "Cle API manquante."}, 500
+
+    data = request.get_json() or {}
+    prompt = (data.get("prompt") or "").strip()
+    if not prompt:
+        return {"error": "Prompt vide."}, 400
+
+    # Nettoyage basique : retire le prefixe visuel eventuel
+    prompt = prompt.replace("🎨", "").strip()
+
+    payload = {
+        "prompt": prompt,
+        "mode": "base",
+        "seed": 0,
+        "steps": 4,
+    }
+    headers = {
+        "Authorization": f"Bearer {NVIDIA_API_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        r = requests.post(NVIDIA_IMAGE_URL, json=payload, headers=headers,
+                          timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+        if r.status_code != 200:
+            err_full = r.text[:500]
+            print(f"[NOVA][ERREUR NVIDIA IMAGE] {r.status_code} -> {err_full}", flush=True)
+            err = err_full[:200].replace('"', "'").replace("\n", " ")
+            return {"error": f"API {r.status_code}: {err}"}, 500
+
+        result = r.json()
+
+        # Plusieurs formats possibles selon le modele
+        image_url = None
+        artifacts = result.get("artifacts") or []
+        if artifacts:
+            art = artifacts[0]
+            if isinstance(art, dict):
+                if art.get("base64"):
+                    image_url = "data:image/png;base64," + art["base64"]
+                elif art.get("url"):
+                    image_url = art["url"]
+
+        if not image_url and result.get("image"):
+            img = result["image"]
+            image_url = img if img.startswith("data:") else "data:image/png;base64," + img
+
+        if not image_url:
+            print(f"[NOVA][IMAGE FORMAT INCONNU] {str(result)[:300]}", flush=True)
+            return {"error": "Format de reponse inconnu."}, 500
+
+        return {"image": image_url}
+
+    except requests.exceptions.ReadTimeout:
+        print("[NOVA][TIMEOUT IMAGE]", flush=True)
+        return {"error": "Delai depasse lors de la generation."}, 504
+    except Exception as e:
+        print(f"[NOVA][EXCEPTION IMAGE] {e}", flush=True)
+        return {"error": str(e)[:200]}, 500
+
+
 @app.route("/debug")
 def debug():
     return {
         "key_present": bool(NVIDIA_API_KEY),
         "key_length": len(NVIDIA_API_KEY),
         "key_valid": NVIDIA_API_KEY.startswith("nvapi-") and len(NVIDIA_API_KEY) > 50,
-        "model": MODEL,
+        "chat_model": MODEL,
+        "image_url": NVIDIA_IMAGE_URL,
         "modes": {k: v["max_tokens"] for k, v in MODES.items()}
     }
 
@@ -121,5 +195,6 @@ def static_files(filename):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"[NOVA] Cle API : {len(NVIDIA_API_KEY)} chars", flush=True)
-    print(f"[NOVA] Model   : {MODEL}", flush=True)
+    print(f"[NOVA] Chat    : {MODEL}", flush=True)
+    print(f"[NOVA] Image   : {NVIDIA_IMAGE_URL}", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)
