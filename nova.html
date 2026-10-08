@@ -761,7 +761,6 @@ body.dark .img-error { color: #fca5a5; }
   stroke-width: 2.4; stroke-linecap: round;
 }
 
-/* Messages : affichage des pièces jointes dans le chat */
 .msg-attachments {
   display: flex;
   flex-wrap: wrap;
@@ -794,7 +793,6 @@ body.dark .img-error { color: #fca5a5; }
   stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
 
-/* Drag & drop sur le composer */
 .composer.dragging .input-box {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -1189,7 +1187,7 @@ let authTab = 'login';
 let abortCtrl = null;
 
 /* ============================================================
-   UPLOAD DE FICHIERS
+   UPLOAD DE FICHIERS (avec description cachée pour les images)
 ============================================================ */
 let pendingAttachments = [];
 
@@ -1197,11 +1195,6 @@ function formatSize(bytes){
   if (bytes < 1024) return bytes + ' o';
   if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' Ko';
   return (bytes/1024/1024).toFixed(2) + ' Mo';
-}
-
-function fileExt(name){
-  const i = name.lastIndexOf('.');
-  return i === -1 ? '' : name.slice(i).toLowerCase();
 }
 
 function renderAttachmentsBar(){
@@ -1220,12 +1213,17 @@ function renderAttachmentsBar(){
       inner = `<div class="attach-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>`;
     }
 
+    // Petit indicateur quand la description est prête (caché, juste un point vert discret)
+    const hasDesc = att.type === 'image' && att.description;
+    const descDot = hasDesc ? '<span title="Analyse IA prête" style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>' : '';
+
     chip.innerHTML = `
       ${inner}
       <div style="min-width:0;">
         <div class="attach-name">${escapeHtml(att.filename)}</div>
-        <div class="attach-size">${att.error ? escapeHtml(att.error) : (att.uploading ? 'Chargement…' : formatSize(att.size || 0))}</div>
+        <div class="attach-size">${att.error ? escapeHtml(att.error) : (att.uploading ? 'Analyse…' : formatSize(att.size || 0))}</div>
       </div>
+      ${descDot}
       <button class="attach-remove" type="button" title="Retirer">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>`;
@@ -1255,6 +1253,7 @@ async function uploadFile(file){
     if (!res.ok || data.error) {
       pendingAttachments[idx] = { ...att, uploading: false, error: data.error || ('Erreur ' + res.status) };
     } else {
+      // MODIF #1 : on stocke aussi `description` (cachée)
       pendingAttachments[idx] = {
         id,
         filename: data.filename,
@@ -1262,6 +1261,7 @@ async function uploadFile(file){
         type: data.type,
         content: data.content,
         data_url: data.data_url,
+        description: data.description,   // <- AJOUT
         truncated: data.truncated,
         uploading: false,
       };
@@ -1284,7 +1284,7 @@ async function handleFiles(fileList){
   }
 }
 
-/* ============ FETCH AVEC RETRY (anti cold-start Render) ============ */
+/* ============ FETCH AVEC RETRY ============ */
 async function fetchWithRetry(url, options, maxRetries = 3) {
   let lastErr;
   for (let i = 0; i <= maxRetries; i++) {
@@ -1756,22 +1756,43 @@ function updateSendBtn(){
 }
 
 /* ============================================================
-   GENERATION D'IMAGE avec animation + pourcentage
+   GENERATION D'IMAGE
 ============================================================ */
 async function sendImageMsg(text){
   text = text.trim();
-  if(!text || isLoading || !currentUser) return;
+  if(!currentUser || isLoading) return;
+  const hasImageAtt = pendingAttachments.some(a => !a.uploading && !a.error && a.type === 'image');
+  if (!text && !hasImageAtt) return;
+
   const w = chatInner.querySelector('.welcome'); if(w) w.remove();
   const conv = getCurrent(); if(!conv) return;
 
-  const displayText = '🎨 ' + text;
+  // Récupère la 1ère image jointe comme référence
+  const refAtt = pendingAttachments.find(a => !a.uploading && !a.error && a.type === 'image');
+
+  const displayText = text ? ('🎨 ' + text) : '🎨 (inspiré de l\'image)';
   const { wrap: uw, body: ub } = makeMsg('user');
   ub.textContent = displayText;
+  if (refAtt) {
+    renderAttachmentsInMsg(ub, [{
+      type: 'image', filename: refAtt.filename, size: refAtt.size,
+      data_url: refAtt.data_url
+    }]);
+  }
   chatInner.appendChild(uw);
   chatEl.scrollTop = chatEl.scrollHeight;
-  conv.messages.push({ role: 'user', content: displayText });
+
+  const userMsg = { role: 'user', content: displayText };
+  if (refAtt) {
+    userMsg.attachments = [{
+      type: 'image', filename: refAtt.filename, size: refAtt.size,
+      data_url: refAtt.data_url
+    }];
+  }
+  conv.messages.push(userMsg);
   if(conv.messages.length === 1){
-    conv.title = '🎨 ' + (text.length > 30 ? text.slice(0,30) + '...' : text);
+    const t = text || 'Image';
+    conv.title = '🎨 ' + (t.length > 30 ? t.slice(0,30) + '...' : t);
     renderConvs();
   }
   saveConvs();
@@ -1805,7 +1826,9 @@ async function sendImageMsg(text){
   const labelEl = body.querySelector('.img-progress-label');
 
   let progress = 0;
-  const labels = ['Initialisation…', 'Analyse du prompt…', 'Génération en cours…', 'Peaufinage…', 'Finalisation…'];
+  const labels = refAtt
+    ? ['Lecture de l\'image…', 'Analyse du style…', 'Génération en cours…', 'Peaufinage…', 'Finalisation…']
+    : ['Initialisation…', 'Analyse du prompt…', 'Génération en cours…', 'Peaufinage…', 'Finalisation…'];
   let labelIdx = 0;
 
   const progressInterval = setInterval(() => {
@@ -1824,11 +1847,24 @@ async function sendImageMsg(text){
   abortCtrl = new AbortController();
   let pollTimer = null;
 
+  // Vide les fichiers joints
+  pendingAttachments = [];
+  renderAttachmentsBar();
+
   try {
+    const startBody = { prompt: text || '' };
+    // MODIF #3 : on envoie la description cachée comme référence
+    if (refAtt && refAtt.description) {
+      startBody.reference_description = refAtt.description;
+    }
+    if (!startBody.prompt && !startBody.reference_description) {
+      startBody.prompt = 'génère une image';
+    }
+
     const startRes = await fetchWithRetry(IMAGE_API_URL + '/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ prompt: text }),
+      body: JSON.stringify(startBody),
       signal: abortCtrl.signal
     });
 
@@ -1915,7 +1951,7 @@ async function sendImageMsg(text){
   }
 }
 
-/* ============ SEND MESSAGE ============ */
+/* ============ SEND MESSAGE (CHAT) ============ */
 async function sendMsg(text){
   text = text.trim();
   if(!currentUser || isLoading) return;
@@ -1929,7 +1965,6 @@ async function sendMsg(text){
   const w = chatInner.querySelector('.welcome'); if(w) w.remove();
   const conv = getCurrent(); if(!conv) return;
 
-  // Récupère les pièces jointes valides AVANT de vider pendingAttachments
   const attsAtSend = pendingAttachments.filter(a => !a.uploading && !a.error);
 
   const { wrap: uw, body: ub } = makeMsg('user');
@@ -1965,7 +2000,6 @@ async function sendMsg(text){
   isLoading = true;
   addTyping();
 
-  // Vide la barre de pièces jointes après envoi
   pendingAttachments = [];
   renderAttachmentsBar();
 
@@ -1993,11 +2027,13 @@ async function sendMsg(text){
         mode: currentMode,
         messages: conv.messages.slice(-20),
         config: { aiName: settings.aiName, personality: settings.personality },
+        // MODIF #2 : on envoie aussi la description cachée au serveur
         attachments: attsAtSend.map(a => ({
           type: a.type,
           filename: a.filename,
           content: a.content,
-          data_url: a.data_url
+          data_url: a.data_url,
+          description: a.description
         }))
       }),
       signal: abortCtrl.signal
@@ -2144,7 +2180,7 @@ document.querySelectorAll('.gen-mode-btn').forEach(b => {
     document.querySelectorAll('.gen-mode-btn').forEach(x =>
       x.classList.toggle('active', x.dataset.gen === currentGenMode));
     inputEl.placeholder = currentGenMode === 'image'
-      ? "Décrivez l'image à générer…"
+      ? "Décrivez l'image (ou joignez-en une pour vous en inspirer)…"
       : "Écrivez un message...";
     inputEl.focus();
   });
