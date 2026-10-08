@@ -205,7 +205,7 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .chat{flex:1;overflow-y:auto;scroll-behavior:smooth;}
 .chat::-webkit-scrollbar{width:8px;}
 .chat::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px;}
-.chat-inner{max-width:760px;margin:0 auto;padding:32px 24px 140px;}
+.chat-inner{max-width:760px;margin:0 auto;padding:32px 24px 180px;}
 
 .msg{display:flex;gap:16px;padding:16px 0;animation:msgIn .35s cubic-bezier(.2,.9,.25,1) both;}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -248,9 +248,6 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .msg-body li::marker{color:var(--accent);}
 .msg-body code{background:var(--code-bg);border:1px solid var(--code-border);border-radius:5px;padding:2px 6px;font-family:var(--mono);font-size:.88em;color:var(--accent);}
 
-/* ============================================================
-   BLOC DE CODE AVEC BOUTON COPIER
-============================================================ */
 .msg-body pre{
   background:var(--code-bg);
   border:1px solid var(--code-border);
@@ -475,6 +472,194 @@ body.dark .err{color:#fca5a5;}
 .backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:70;}
 .backdrop.show{display:block;}
 
+/* ============================================================
+   GENERATION D'IMAGES
+============================================================ */
+.gen-mode-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  width: fit-content;
+}
+.gen-mode-btn {
+  padding: 7px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: all .2s;
+}
+.gen-mode-btn:hover { color: var(--text); }
+.gen-mode-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.gen-mode-btn svg {
+  width: 14px; height: 14px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.gen-mode-btn.active svg { stroke: var(--accent); }
+
+.img-result {
+  max-width: 512px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-md);
+  margin-top: 4px;
+}
+.img-result img {
+  width: 100%;
+  display: block;
+  border-radius: 13px;
+}
+
+.img-loading {
+  max-width: 512px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  padding: 16px;
+  box-shadow: var(--shadow-md);
+  margin-top: 4px;
+  animation: imgCardIn .4s cubic-bezier(.2,.9,.25,1) both;
+}
+@keyframes imgCardIn {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.img-loading-canvas {
+  aspect-ratio: 1/1;
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(201,100,66,.15), transparent 55%),
+    radial-gradient(circle at 70% 70%, rgba(201,100,66,.10), transparent 55%),
+    linear-gradient(135deg, var(--bg-2), var(--surface), var(--bg-2));
+  background-size: 200% 200%, 200% 200%, 100% 100%;
+  animation: canvasShift 4s ease-in-out infinite;
+}
+@keyframes canvasShift {
+  0%,100% { background-position: 0% 0%, 100% 100%, 0 0; }
+  50%     { background-position: 100% 100%, 0% 0%, 0 0; }
+}
+
+.img-loading-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg,
+    transparent 30%,
+    rgba(201,100,66,.20) 50%,
+    transparent 70%);
+  background-size: 200% 200%;
+  animation: canvasSweep 2.2s linear infinite;
+  pointer-events: none;
+}
+@keyframes canvasSweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.img-loading-icon {
+  width: 72px;
+  height: 72px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  animation: iconPulse 2s ease-in-out infinite;
+}
+.img-loading-icon::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px dashed var(--accent);
+  opacity: .45;
+  animation: spin 6s linear infinite;
+}
+.img-loading-icon svg {
+  width: 42px;
+  height: 42px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .85;
+}
+@keyframes iconPulse {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.img-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.img-progress-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.img-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  border-radius: 2px;
+  width: 0%;
+  transition: width .35s ease;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.img-progress-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.img-progress-pct {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+.img-error {
+  padding: 14px 16px;
+  background: rgba(220,38,38,.08);
+  border: 1px solid rgba(220,38,38,.2);
+  border-radius: 10px;
+  color: #dc2626;
+  font-size: 13px;
+  line-height: 1.6;
+}
+body.dark .img-error { color: #fca5a5; }
+
 @media(max-width:768px){
   .landing-nav{padding:14px 20px;}
   .landing-nav-links{display:none;}
@@ -488,7 +673,7 @@ body.dark .err{color:#fca5a5;}
   .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:80;box-shadow:var(--shadow-xl);}
   .sidebar:not(.collapsed){margin-left:0;}
   .sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w));}
-  .chat-inner{padding:20px 16px 130px;}
+  .chat-inner{padding:20px 16px 180px;}
   .composer{padding:10px 16px 16px;}
   .topbar{padding:0 14px;}
   .ai-status{display:none;}
@@ -501,6 +686,7 @@ body.dark .err{color:#fca5a5;}
   .welcome-logo img.text{width:140px;}
   .code-copy span{display:none;}
   .code-copy{padding:5px 7px;}
+  .img-result, .img-loading{max-width:100%;}
 }
 @media(min-width:769px){.backdrop{display:none!important;}}
 
@@ -576,6 +762,11 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
         <p>Changez le nom de l'IA, sa personnalité, l'apparence.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        <h3>Génération d'images</h3>
+        <p>Créez des images à partir d'une simple description.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
         <h3>3 modes d'intelligence</h3>
         <p>Faible, Moyen ou Max selon vos besoins.</p>
@@ -589,11 +780,6 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
         <div class="feature-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
         <h3>Code avec bouton copier</h3>
         <p>Chaque bloc de code a un bouton pour le copier en un clic.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-        <h3>Vos données restent chez vous</h3>
-        <p>Aucune donnée personnelle n'est envoyée.</p>
       </div>
     </div>
   </section>
@@ -676,6 +862,16 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 
     <div class="composer">
       <div class="composer-inner">
+        <div class="gen-mode-toggle">
+          <button class="gen-mode-btn active" data-gen="chat" type="button">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Chat
+          </button>
+          <button class="gen-mode-btn" data-gen="image" type="button">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Image
+          </button>
+        </div>
         <div class="input-box">
           <textarea id="input" rows="1" placeholder="Écrivez un message..."></textarea>
           <button class="send-btn" id="sendBtn" disabled>
@@ -807,6 +1003,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 
 <script>
 const API_URL = '/api/chat';
+const IMAGE_API_URL = '/api/image';
 const $ = id => document.getElementById(id);
 
 const chatEl = $('chat');
@@ -820,6 +1017,7 @@ const fabModes = $('fabModes');
 
 let currentUser = null;
 let currentMode = 'moyen';
+let currentGenMode = 'chat';
 let conversations = [];
 let currentConvId = null;
 let isLoading = false;
@@ -832,7 +1030,6 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
   for (let i = 0; i <= maxRetries; i++) {
     try {
       const res = await fetch(url, options);
-      // Si erreur 502/503/504 = probable cold start → on retente
       if (!res.ok && [502, 503, 504].includes(res.status) && i < maxRetries) {
         throw new Error('HTTP ' + res.status);
       }
@@ -841,7 +1038,6 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
       lastErr = err;
       if (err.name === 'AbortError') throw err;
       if (i < maxRetries) {
-        // 2s, puis 5s, puis 10s
         const delay = [2000, 5000, 10000][i] || 10000;
         await new Promise(r => setTimeout(r, delay));
       }
@@ -917,7 +1113,25 @@ const getUsers = () => JSON.parse(localStorage.getItem('nova_users') || '{}');
 const saveUsers = u => localStorage.setItem('nova_users', JSON.stringify(u));
 const convKey = () => 'nova_conv_' + currentUser;
 const loadConvs = () => JSON.parse(localStorage.getItem(convKey()) || '[]');
-const saveConvs = () => localStorage.setItem(convKey(), JSON.stringify(conversations));
+
+const saveConvs = () => {
+  try {
+    localStorage.setItem(convKey(), JSON.stringify(conversations));
+  } catch(e) {
+    console.warn('localStorage plein, nettoyage des anciennes images...', e);
+    conversations.forEach(c => {
+      c.messages.forEach(m => {
+        if (m.isImage) {
+          delete m.image;
+          m.content = '[Image générée — non sauvegardée]';
+          m.isImage = false;
+        }
+      });
+    });
+    try { localStorage.setItem(convKey(), JSON.stringify(conversations)); }
+    catch(e2){ console.error('Impossible de sauvegarder', e2); }
+  }
+};
 
 function simpleHash(str){
   let h = 0;
@@ -1061,7 +1275,7 @@ $('brandLogo').addEventListener('click', createNewConv);
 
 /* ============ RENDER ============ */
 function escapeHtml(t){
-  return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function renderMD(text){
@@ -1184,8 +1398,12 @@ function renderCurrent(){
   if(c.messages.length === 0){ renderWelcome(); return; }
   c.messages.forEach(m => {
     const { wrap, body } = makeMsg(m.role);
-    body.innerHTML = renderMD(m.content);
-    enhanceCodeBlocks(body);
+    if (m.isImage && m.image) {
+      body.innerHTML = `<div class="img-result"><img src="${m.image}" alt="Image générée" loading="lazy"></div>`;
+    } else {
+      body.innerHTML = renderMD(m.content);
+      enhanceCodeBlocks(body);
+    }
     chatInner.appendChild(wrap);
   });
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -1239,10 +1457,141 @@ function addTyping(){
 function removeTyping(){ const t = $('typing'); if(t) t.remove(); }
 function autoResize(){ inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 220) + 'px'; }
 
-/* ============ SEND MESSAGE (avec retry + message réveil serveur) ============ */
+/* ============================================================
+   GENERATION D'IMAGE avec animation + pourcentage
+============================================================ */
+async function sendImageMsg(text){
+  text = text.trim();
+  if(!text || isLoading || !currentUser) return;
+  const w = chatInner.querySelector('.welcome'); if(w) w.remove();
+  const conv = getCurrent(); if(!conv) return;
+
+  const displayText = '🎨 ' + text;
+  const { wrap: uw, body: ub } = makeMsg('user');
+  ub.textContent = displayText;
+  chatInner.appendChild(uw);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  conv.messages.push({ role: 'user', content: displayText });
+  if(conv.messages.length === 1){
+    conv.title = '🎨 ' + (text.length > 30 ? text.slice(0,30) + '...' : text);
+    renderConvs();
+  }
+  saveConvs();
+
+  inputEl.value = '';
+  autoResize();
+  sendBtn.disabled = true;
+  isLoading = true;
+
+  const { wrap, body } = makeMsg('assistant');
+  chatInner.appendChild(wrap);
+  body.innerHTML = `
+    <div class="img-loading">
+      <div class="img-loading-canvas">
+        <div class="img-loading-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+      </div>
+      <div class="img-progress">
+        <div class="img-progress-bar"><div class="img-progress-fill"></div></div>
+        <div class="img-progress-text">
+          <span class="img-progress-label">Initialisation…</span>
+          <span class="img-progress-pct">0%</span>
+        </div>
+      </div>
+    </div>`;
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  const fill = body.querySelector('.img-progress-fill');
+  const pctEl = body.querySelector('.img-progress-pct');
+  const labelEl = body.querySelector('.img-progress-label');
+
+  let progress = 0;
+  const labels = ['Initialisation…', 'Analyse du prompt…', 'Génération en cours…', 'Peaufinage…', 'Finalisation…'];
+  let labelIdx = 0;
+
+  const progressInterval = setInterval(() => {
+    const inc = Math.max(0.6, (95 - progress) * 0.028);
+    progress = Math.min(progress + inc, 95);
+    fill.style.width = progress + '%';
+    pctEl.textContent = Math.round(progress) + '%';
+    const newIdx = Math.min(Math.floor(progress / 20), labels.length - 1);
+    if (newIdx !== labelIdx) {
+      labelIdx = newIdx;
+      labelEl.textContent = labels[labelIdx];
+    }
+  }, 150);
+
+  const startId = currentConvId;
+  abortCtrl = new AbortController();
+
+  try {
+    const res = await fetchWithRetry(IMAGE_API_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ prompt: text }),
+      signal: abortCtrl.signal
+    });
+
+    if (!res.ok) {
+      let msg = 'Erreur ' + res.status;
+      try { const j = await res.json(); if (j.error) msg = j.error; } catch(e){}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (!data.image) throw new Error('Aucune image reçue.');
+
+    clearInterval(progressInterval);
+    progress = 100;
+    fill.style.width = '100%';
+    pctEl.textContent = '100%';
+    labelEl.textContent = 'Terminé !';
+
+    if (currentConvId !== startId) return;
+
+    await new Promise(r => setTimeout(r, 450));
+
+    body.innerHTML = `<div class="img-result"><img src="${data.image}" alt="Image générée"></div>`;
+    conv.messages.push({
+      role: 'assistant',
+      content: '[Image générée]',
+      image: data.image,
+      isImage: true
+    });
+    saveConvs();
+    chatEl.scrollTop = chatEl.scrollHeight;
+
+  } catch(err) {
+    clearInterval(progressInterval);
+    if (err.name === 'AbortError') return;
+    if (currentConvId === startId) {
+      let msg = err.message;
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        msg = "Serveur en cours de démarrage. Attendez ~30 secondes puis réessayez.";
+      }
+      body.innerHTML = `<div class="img-error">⚠️ <strong>Erreur :</strong> ${escapeHtml(msg)}</div>`;
+    }
+  } finally {
+    if (currentConvId === startId) {
+      isLoading = false;
+      sendBtn.disabled = inputEl.value.trim() === '';
+      inputEl.focus();
+    }
+    abortCtrl = null;
+  }
+}
+
+/* ============ SEND MESSAGE ============ */
 async function sendMsg(text){
   text = text.trim();
   if(!text || isLoading || !currentUser) return;
+
+  // Redirection vers la génération d'image
+  if (currentGenMode === 'image') {
+    return sendImageMsg(text);
+  }
+
   const w = chatInner.querySelector('.welcome'); if(w) w.remove();
   const conv = getCurrent(); if(!conv) return;
 
@@ -1266,7 +1615,6 @@ async function sendMsg(text){
   const startId = currentConvId;
   abortCtrl = new AbortController();
 
-  // Message "réveil du serveur" si ça dépasse 3 secondes
   const wakeTimeout = setTimeout(() => {
     const typing = document.getElementById('typing');
     if (typing) {
@@ -1359,8 +1707,6 @@ async function sendMsg(text){
     removeTyping();
     if(currentConvId === startId){
       const { wrap, body } = makeMsg('assistant');
-
-      // Message clair selon le type d'erreur
       let errMsg;
       if(err.message.includes('Failed to fetch') || err.message.includes('NetworkError')){
         errMsg = "Serveur en cours de démarrage (hébergement gratuit). Attendez ~30 secondes puis renvoyez votre message.";
@@ -1371,7 +1717,6 @@ async function sendMsg(text){
       } else {
         errMsg = err.message;
       }
-
       body.innerHTML = `<p><strong>⚠️ ${escapeHtml(errMsg)}</strong></p>`;
       chatInner.appendChild(wrap);
       chatEl.scrollTop = chatEl.scrollHeight;
@@ -1390,6 +1735,19 @@ async function sendMsg(text){
 inputEl.addEventListener('input', () => { autoResize(); sendBtn.disabled = inputEl.value.trim() === '' || isLoading; });
 inputEl.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMsg(inputEl.value); } });
 sendBtn.addEventListener('click', () => sendMsg(inputEl.value));
+
+/* ============ TOGGLE CHAT / IMAGE ============ */
+document.querySelectorAll('.gen-mode-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    currentGenMode = b.dataset.gen;
+    document.querySelectorAll('.gen-mode-btn').forEach(x =>
+      x.classList.toggle('active', x.dataset.gen === currentGenMode));
+    inputEl.placeholder = currentGenMode === 'image'
+      ? "Décrivez l'image à générer…"
+      : "Écrivez un message...";
+    inputEl.focus();
+  });
+});
 
 /* ============ MODE FAB ============ */
 function setMode(m){
