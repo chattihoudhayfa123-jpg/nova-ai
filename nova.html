@@ -146,7 +146,6 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .app{display:flex;height:100vh;height:100dvh;opacity:0;visibility:hidden;transition:opacity .4s ease,visibility .4s ease;}
 .app.active{opacity:1;visibility:visible;}
 
-/* SIDEBAR */
 .sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--sidebar);display:flex;flex-direction:column;transition:margin-left .3s cubic-bezier(.2,.9,.25,1);border-right:1px solid var(--border);}
 .sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w));}
 
@@ -188,7 +187,6 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .sb-action:hover{background:var(--sidebar-hover);color:var(--text);}
 .sb-action svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0;}
 
-/* MAIN */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg);position:relative;}
 .topbar{height:56px;padding:0 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .icon-btn{width:36px;height:36px;border-radius:8px;border:none;background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center;transition:all .15s;flex-shrink:0;}
@@ -204,7 +202,6 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .user-pill:hover{background:var(--sidebar-hover);}
 .user-pill .ava{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;}
 
-/* CHAT */
 .chat{flex:1;overflow-y:auto;scroll-behavior:smooth;}
 .chat::-webkit-scrollbar{width:8px;}
 .chat::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px;}
@@ -214,21 +211,10 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 
 .msg-ava{width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;margin-top:2px;overflow:visible;}
-
-/* ============================================================
-   LOGO IA — Rotation quand l'IA réfléchit
-============================================================ */
-.msg.ai .msg-ava img{
-  width:100%;height:100%;object-fit:contain;
-  transform-origin:center center;
-  transition:transform .3s;
-}
+.msg.ai .msg-ava img{width:100%;height:100%;object-fit:contain;transform-origin:center center;transition:transform .3s;}
 .msg.ai:hover .msg-ava img{transform:rotate(-8deg) scale(1.08);}
 
-/* Rotation continue pendant la réflexion */
-.msg.ai.thinking .msg-ava img{
-  animation:novaSpin 1.6s linear infinite !important;
-}
+.msg.ai.thinking .msg-ava img{animation:novaSpin 1.6s linear infinite !important;}
 @keyframes novaSpin{
   0%{transform:rotate(0deg) scale(1);}
   50%{transform:rotate(180deg) scale(1.08);}
@@ -264,11 +250,37 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .msg-body pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:10px;padding:16px 18px;margin:14px 0;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.65;}
 .msg-body pre code{background:none;border:none;padding:0;color:var(--text);}
 
-/* Animation de texte */
-.word-fade{display:inline;animation:wordIn .25s ease both;}
-@keyframes wordIn{from{opacity:0;transform:translateY(2px);filter:blur(2px);}to{opacity:1;transform:none;filter:blur(0);}}
+/* ============================================================
+   ANIMATION DE TEXTE — Chaque mot apparaît avec fade + blur
+============================================================ */
+.word-fade{
+  display:inline;
+  animation:wordIn .35s ease both;
+}
+@keyframes wordIn{
+  from{
+    opacity:0;
+    transform:translateY(3px);
+    filter:blur(3px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
+    filter:blur(0);
+  }
+}
 
-.cursor{display:inline-block;width:2px;height:1em;background:var(--accent);margin-left:1px;vertical-align:text-bottom;animation:blink .8s steps(2,start) infinite;border-radius:1px;box-shadow:0 0 8px var(--accent-glow);}
+.cursor{
+  display:inline-block;
+  width:2px;
+  height:1em;
+  background:var(--accent);
+  margin-left:1px;
+  vertical-align:text-bottom;
+  animation:blink .8s steps(2,start) infinite;
+  border-radius:1px;
+  box-shadow:0 0 8px var(--accent-glow);
+}
 @keyframes blink{50%{opacity:0;}}
 
 .typing-dots{display:inline-flex;align-items:center;gap:4px;padding:6px 0;}
@@ -307,7 +319,7 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .send-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
 .composer-hint{text-align:center;font-size:11.5px;color:var(--text-3);margin-top:8px;}
 
-/* FAB MODE — SANS BADGE */
+/* FAB MODE */
 .fab-wrap{position:fixed;bottom:24px;right:24px;z-index:100;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
 .fab-modes{display:flex;flex-direction:column;gap:8px;align-items:flex-end;opacity:0;visibility:hidden;transform:translateY(10px) scale(.95);transform-origin:bottom right;transition:all .25s cubic-bezier(.2,.9,.25,1);pointer-events:none;}
 .fab-modes.open{opacity:1;visibility:visible;transform:none;pointer-events:auto;}
@@ -317,7 +329,6 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .fab-mode .mdot{width:8px;height:8px;border-radius:50%;background:var(--text-3);}
 .fab-mode.active .mdot{background:#fff;}
 
-/* Bouton Mode — Rectangle (sans badge) */
 .fab-btn{padding:12px 22px;border-radius:12px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px var(--accent-glow);transition:all .25s cubic-bezier(.2,.9,.25,1);white-space:nowrap;position:relative;overflow:hidden;}
 .fab-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,.25) 50%,transparent 60%);transform:translateX(-100%);transition:transform .7s;}
 .fab-btn:hover::before{transform:translateX(100%);}
@@ -408,7 +419,6 @@ body.dark .err{color:#fca5a5;}
 .backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:70;}
 .backdrop.show{display:block;}
 
-/* RESPONSIVE */
 @media(max-width:768px){
   .landing-nav{padding:14px 20px;}
   .landing-nav-links{display:none;}
@@ -445,9 +455,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 <div class="landing" id="landing">
   <nav class="landing-nav">
     <div class="landing-brand">
-      <div class="landing-brand-icon">
-        <img src="/logo.png" alt="NOVA">
-      </div>
+      <div class="landing-brand-icon"><img src="/logo.png" alt="NOVA"></div>
       NOVA
     </div>
     <div class="landing-nav-links">
@@ -459,10 +467,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   <section class="hero">
     <div class="hero-badge">Propulsé par NVIDIA Nemotron</div>
     <h1>Un assistant <em>intelligent</em> qui vous comprend vraiment.</h1>
-    <p class="subtitle">
-      Discutez, créez, apprenez et explorez avec une IA de nouvelle génération.
-      Interface épurée, réponses naturelles, personnalisation complète.
-    </p>
+    <p class="subtitle">Discutez, créez, apprenez et explorez avec une IA de nouvelle génération.</p>
     <div class="hero-actions">
       <button class="btn-hero primary" id="startBtn">
         <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
@@ -476,9 +481,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 
     <div class="hero-preview">
       <div class="preview-bar">
-        <span class="preview-dot"></span>
-        <span class="preview-dot"></span>
-        <span class="preview-dot"></span>
+        <span class="preview-dot"></span><span class="preview-dot"></span><span class="preview-dot"></span>
         <span class="preview-url">nova-ai.onrender.com</span>
       </div>
       <div class="preview-body">
@@ -488,11 +491,11 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
         </div>
         <div class="pv-msg ai">
           <div class="pv-ava ai"><img src="/logo.png" alt="NOVA"></div>
-          <div class="pv-bubble">Le machine learning, c'est apprendre à une machine à reconnaître des <code>patterns</code> dans les données.</div>
+          <div class="pv-bubble">Le machine learning, c'est apprendre à une machine à reconnaître des <code>patterns</code>.</div>
         </div>
         <div class="pv-msg user">
           <div class="pv-ava user"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-          <div class="pv-bubble">Donne-moi un exemple concret</div>
+          <div class="pv-bubble">Donne-moi un exemple</div>
         </div>
       </div>
     </div>
@@ -508,32 +511,32 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
         <h3>Réponses instantanées</h3>
-        <p>Les messages s'affichent mot par mot en temps réel pour une conversation fluide.</p>
+        <p>Les messages s'affichent mot par mot en temps réel.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
         <h3>Personnalisation totale</h3>
-        <p>Changez le nom de l'IA, sa personnalité, l'apparence complète de l'interface.</p>
+        <p>Changez le nom de l'IA, sa personnalité, l'apparence.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
         <h3>3 modes d'intelligence</h3>
-        <p>Faible, Moyen ou Max. Choisissez le niveau de réflexion selon votre demande.</p>
+        <p>Faible, Moyen ou Max selon vos besoins.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
         <h3>Historique illimité</h3>
-        <p>Toutes vos conversations sont sauvegardées localement. Retrouvez-les à tout moment.</p>
+        <p>Toutes vos conversations sont sauvegardées.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
         <h3>Markdown complet</h3>
-        <p>Code coloré, titres, listes, gras, italique. Vos réponses sont parfaitement formatées.</p>
+        <p>Code coloré, titres, listes, gras, italique.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
         <h3>Vos données restent chez vous</h3>
-        <p>Aucune donnée personnelle n'est envoyée ailleurs. Tout reste dans votre navigateur.</p>
+        <p>Aucune donnée personnelle n'est envoyée.</p>
       </div>
     </div>
   </section>
@@ -560,9 +563,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar">
     <div class="sb-top">
-      <div class="sb-logo" id="brandLogo" title="Accueil">
-        <img src="/logo.png" alt="NOVA">
-      </div>
+      <div class="sb-logo" id="brandLogo" title="Accueil"><img src="/logo.png" alt="NOVA"></div>
       <div class="sb-brand">
         <strong id="brandName">NOVA</strong>
         <small>Assistant IA</small>
@@ -600,9 +601,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 
   <main class="main">
     <header class="topbar">
-      <button class="icon-btn" id="menuBtn">
-        <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-      </button>
+      <button class="icon-btn" id="menuBtn"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
       <div class="topbar-title">
         <span id="topbarName">NOVA</span>
         <span class="ai-status">Connecté</span>
@@ -633,14 +632,13 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </main>
 </div>
 
-<!-- FAB MODE (sans badge MOY) -->
 <div class="fab-wrap" id="fabWrap" style="display:none;">
   <div class="fab-modes" id="fabModes">
     <button class="fab-mode" data-mode="max"><span class="mdot"></span>Max · Approfondi</button>
     <button class="fab-mode active" data-mode="moyen"><span class="mdot"></span>Moyen · Équilibré</button>
     <button class="fab-mode" data-mode="faible"><span class="mdot"></span>Faible · Rapide</button>
   </div>
-  <button class="fab-btn" id="fabBtn" title="Changer de mode">
+  <button class="fab-btn" id="fabBtn">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     <span>Mode</span>
   </button>
@@ -651,10 +649,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   <div class="modal">
     <div class="modal-head">
       <div class="modal-head-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div>
-        <h2>Conditions d'utilisation</h2>
-        <p>À lire avant de continuer</p>
-      </div>
+      <div><h2>Conditions d'utilisation</h2><p>À lire avant de continuer</p></div>
     </div>
     <div class="modal-body">
       <h3>1. Acceptation</h3>
@@ -719,22 +714,13 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   <div class="modal">
     <div class="modal-head">
       <div class="modal-head-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
-      <div>
-        <h2>Personnalisation</h2>
-        <p>Configurez votre assistant</p>
-      </div>
+      <div><h2>Personnalisation</h2><p>Configurez votre assistant</p></div>
     </div>
     <div class="modal-body">
       <div class="set-sec">
         <h4>Identité de l'IA</h4>
-        <div class="field">
-          <label for="setAiName">Nom de l'assistant</label>
-          <input type="text" id="setAiName" placeholder="NOVA" maxlength="30">
-        </div>
-        <div class="field">
-          <label for="setPersonality">Personnalité / Instructions</label>
-          <input type="text" id="setPersonality" placeholder="Tu es un assistant utile, clair et bienveillant...">
-        </div>
+        <div class="field"><label for="setAiName">Nom de l'assistant</label><input type="text" id="setAiName" placeholder="NOVA" maxlength="30"></div>
+        <div class="field"><label for="setPersonality">Personnalité / Instructions</label><input type="text" id="setPersonality" placeholder="Tu es un assistant utile, clair et bienveillant..."></div>
       </div>
       <div class="set-sec">
         <h4>Apparence</h4>
@@ -801,7 +787,6 @@ function showApp(){
   setTimeout(() => {
     $('app').classList.add('active');
     $('fabWrap').style.display = 'flex';
-
     if(!localStorage.getItem('nova_terms_accepted')){
       $('termsOverlay').classList.add('open');
     } else {
@@ -842,8 +827,7 @@ $('setAiName').addEventListener('input', () => {
   applySettings(); saveSettings();
 });
 $('setPersonality').addEventListener('input', () => {
-  settings.personality = $('setPersonality').value;
-  saveSettings();
+  settings.personality = $('setPersonality').value; saveSettings();
 });
 $('setReset').addEventListener('click', () => {
   if(!confirm('Réinitialiser ?')) return;
@@ -881,21 +865,18 @@ $('termsBtn').addEventListener('click', () => {
 /* ============ LOGIN ============ */
 function showErr(msg){
   const e = $('authErr');
-  e.textContent = msg;
-  e.classList.add('show');
+  e.textContent = msg; e.classList.add('show');
   setTimeout(() => e.classList.remove('show'), 4000);
 }
 
 $('tabLogin').addEventListener('click', () => {
   authTab = 'login';
-  $('tabLogin').classList.add('active');
-  $('tabSignup').classList.remove('active');
+  $('tabLogin').classList.add('active'); $('tabSignup').classList.remove('active');
   $('authBtn').textContent = 'Se connecter';
 });
 $('tabSignup').addEventListener('click', () => {
   authTab = 'signup';
-  $('tabSignup').classList.add('active');
-  $('tabLogin').classList.remove('active');
+  $('tabSignup').classList.add('active'); $('tabLogin').classList.remove('active');
   $('authBtn').textContent = 'Créer mon compte';
 });
 $('authBtn').addEventListener('click', handleAuth);
@@ -913,8 +894,7 @@ function handleAuth(){
   if(authTab === 'signup'){
     if(users[u]){ showErr("Nom déjà utilisé."); return; }
     users[u] = { pass: h, created: Date.now() };
-    saveUsers(users);
-    loginUser(u);
+    saveUsers(users); loginUser(u);
   } else {
     if(!users[u]){ showErr("Compte inexistant."); return; }
     if(users[u].pass !== h){ showErr("Mot de passe incorrect."); return; }
@@ -942,8 +922,7 @@ function loginUser(u){
 function logout(){
   if(!confirm("Se déconnecter ?")) return;
   if(abortCtrl) abortCtrl.abort();
-  currentUser = null;
-  conversations = []; currentConvId = null;
+  currentUser = null; conversations = []; currentConvId = null;
   localStorage.removeItem('nova_currentUser');
   chatInner.innerHTML = ''; convList.innerHTML = '';
   $('userPill').style.display = 'none';
@@ -1026,39 +1005,27 @@ function renderMD(text){
   return html;
 }
 
-function animateNewContent(el, text, isComplete){
+/* ============================================================
+   ANIMATION DE TEXTE PROGRESSIVE
+   Ajoute seulement les NOUVEAUX mots à la fin.
+   Ne touche pas à ce qui est déjà affiché.
+============================================================ */
+function appendWords(container, text){
   if(!settings.wordAnim){
-    el.innerHTML = renderMD(text) + (isComplete ? '' : '<span class="cursor"></span>');
+    container.appendChild(document.createTextNode(text));
     return;
   }
-  const html = renderMD(text);
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = html;
-  wrapTextNodes(wrapper);
-  el.innerHTML = wrapper.innerHTML;
-  if(!isComplete) el.insertAdjacentHTML('beforeend', '<span class="cursor"></span>');
-}
-
-function wrapTextNodes(root){
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-  const nodes = [];
-  while(walker.nextNode()) nodes.push(walker.currentNode);
-  nodes.forEach(node => {
-    const text = node.textContent;
-    if(!text.trim()) return;
-    const parts = text.split(/(\s+)/);
-    const frag = document.createDocumentFragment();
-    parts.forEach(part => {
-      if(/^\s+$/.test(part)){
-        frag.appendChild(document.createTextNode(part));
-      } else if(part.length > 0){
-        const span = document.createElement('span');
-        span.className = 'word-fade';
-        span.textContent = part;
-        frag.appendChild(span);
-      }
-    });
-    node.parentNode.replaceChild(frag, node);
+  const parts = text.split(/(\s+)/);
+  parts.forEach(part => {
+    if(part === '') return;
+    if(/^\s+$/.test(part)){
+      container.appendChild(document.createTextNode(part));
+    } else {
+      const span = document.createElement('span');
+      span.className = 'word-fade';
+      span.textContent = part;
+      container.appendChild(span);
+    }
   });
 }
 
@@ -1108,31 +1075,19 @@ function renderWelcome(){
     <div class="suggestions">
       <button class="sugg" data-p="Explique-moi l'intelligence artificielle simplement">
         <span class="sugg-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
-        <div>
-          <div class="sugg-text">Explique-moi l'IA</div>
-          <div class="sugg-sub">Les bases en termes simples</div>
-        </div>
+        <div><div class="sugg-text">Explique-moi l'IA</div><div class="sugg-sub">Les bases en termes simples</div></div>
       </button>
       <button class="sugg" data-p="Écris-moi un email professionnel pour demander un rendez-vous">
         <span class="sugg-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg></span>
-        <div>
-          <div class="sugg-text">Rédiger un email</div>
-          <div class="sugg-sub">Demande professionnelle</div>
-        </div>
+        <div><div class="sugg-text">Rédiger un email</div><div class="sugg-sub">Demande professionnelle</div></div>
       </button>
       <button class="sugg" data-p="Donne-moi 5 idées de projets innovants">
         <span class="sugg-icon"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>
-        <div>
-          <div class="sugg-text">Idées de projets</div>
-          <div class="sugg-sub">5 idées créatives</div>
-        </div>
+        <div><div class="sugg-text">Idées de projets</div><div class="sugg-sub">5 idées créatives</div></div>
       </button>
       <button class="sugg" data-p="Aide-moi à apprendre le JavaScript avec un plan clair">
         <span class="sugg-icon"><svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span>
-        <div>
-          <div class="sugg-text">Apprendre à coder</div>
-          <div class="sugg-sub">Plan JavaScript</div>
-        </div>
+        <div><div class="sugg-text">Apprendre à coder</div><div class="sugg-sub">Plan JavaScript</div></div>
       </button>
     </div>`;
   chatInner.appendChild(w);
@@ -1146,7 +1101,7 @@ function renderWelcome(){
 function addTyping(){
   const { wrap, body } = makeMsg('assistant');
   wrap.id = 'typing';
-  wrap.classList.add('thinking'); /* ← Déclenche rotation logo */
+  wrap.classList.add('thinking');
   body.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
   chatInner.appendChild(wrap);
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -1154,7 +1109,7 @@ function addTyping(){
 function removeTyping(){ const t = $('typing'); if(t) t.remove(); }
 function autoResize(){ inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 220) + 'px'; }
 
-/* ============ SEND ============ */
+/* ============ SEND MESSAGE ============ */
 async function sendMsg(text){
   text = text.trim();
   if(!text || isLoading || !currentUser) return;
@@ -1188,10 +1143,7 @@ async function sendMsg(text){
       body: JSON.stringify({
         mode: currentMode,
         messages: conv.messages.slice(-20),
-        config: {
-          aiName: settings.aiName,
-          personality: settings.personality
-        }
+        config: { aiName: settings.aiName, personality: settings.personality }
       }),
       signal: abortCtrl.signal
     });
@@ -1199,9 +1151,21 @@ async function sendMsg(text){
     if(currentConvId !== startId) return;
     removeTyping();
 
+    // Créer le message assistant
     const { wrap, body } = makeMsg('assistant');
     chatInner.appendChild(wrap);
+
+    // Conteneur pour les mots animés
+    const wordsContainer = document.createElement('span');
+    body.appendChild(wordsContainer);
+
+    // Curseur
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    body.appendChild(cursor);
+
     let full = '';
+    let displayedLen = 0;
     let raw = '';
 
     const reader = res.body.getReader();
@@ -1225,17 +1189,27 @@ async function sendMsg(text){
           const delta = json.choices?.[0]?.delta;
           if(delta && delta.content){
             full += delta.content;
-            animateNewContent(body, full, false);
+            // Récupérer uniquement le nouveau texte
+            const newText = full.slice(displayedLen);
+            displayedLen = full.length;
+            // Ajouter au container (avant le curseur)
+            appendWords(wordsContainer, newText);
             chatEl.scrollTop = chatEl.scrollHeight;
           }
         } catch(e){ if(e.message && !e.message.includes('JSON')) throw e; }
       }
     }
 
+    // Retirer le curseur à la fin
+    cursor.remove();
+
     if(currentConvId === startId){
-      animateNewContent(body, full, true);
-      if(full){ conv.messages.push({ role:'assistant', content: full }); saveConvs(); }
-      else { body.innerHTML = '<p><em>Aucune réponse reçue.</em></p>'; }
+      if(full){
+        conv.messages.push({ role:'assistant', content: full });
+        saveConvs();
+      } else {
+        body.innerHTML = '<p><em>Aucune réponse reçue. Réessayez.</em></p>';
+      }
     }
   } catch(err){
     if(err.name === 'AbortError') return;
@@ -1303,10 +1277,7 @@ function checkLogin(){
 window.addEventListener('load', () => {
   loadSettings();
   setMode('moyen');
-  // Sidebar OUVERTE par défaut sur desktop
-  if(window.innerWidth <= 768){
-    sidebar.classList.add('collapsed');
-  }
+  if(window.innerWidth <= 768) sidebar.classList.add('collapsed');
 });
 
 window.addEventListener('resize', () => {
