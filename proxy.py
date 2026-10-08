@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Flask, request, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 import requests
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -30,9 +31,9 @@ def get_key():
     return os.environ.get("NVIDIA_API_KEY", "").strip()
 
 
+_key_check = get_key()
 print("=" * 60, flush=True)
-_key = get_key()
-print(f"[NOVA] Cle API : {'OK (' + str(len(_key)) + ' chars)' if _key else 'MANQUANTE'}", flush=True)
+print(f"[NOVA] Cle API : {'OK (' + str(len(_key_check)) + ' chars)' if _key_check else 'MANQUANTE'}", flush=True)
 print("=" * 60, flush=True)
 
 
@@ -43,8 +44,94 @@ def debug():
         "key_present": bool(key),
         "key_length": len(key),
         "key_valid": key.startswith("nvapi-") and len(key) > 50,
-        "status": "OK" if key.startswith("nvapi-") and len(key) > 50 else "Cle API manquante ou invalide"
+        "status": "OK" if key.startswith("nvapi-") and len(key) > 50 else "Cle API manquante"
     }
+
+
+def try_model(model, payload_base, headers):
+    """
+    Essaie un modèle en streaming.
+    Retourne (success, generator_or_None)
+    """
+    payload = {**payload_base, "model": model}
+
+    try:
+        print(f"[NOVA] Essai streaming: {model}", flush=True)
+        r = requests.post(
+            NVIDIA_URL,
+            json=payload,
+            headers=headers,
+            stream=True,
+            timeout=(15, 180)  # 15s connexion, 180s lecture
+        )
+
+        if r.status_code == 200:
+            # Collecter les lignes SSE
+            lines_buffer = []
+            has_content = False
+            for line in r.iter_lines():
+                if line:
+                    lines_buffer.append(line + b"\n")
+                    # Vérifie si cette ligne contient du contenu
+                    if b'"content":"' in line or b'"content": "' in line:
+                        has_content = True
+
+            if has_content:
+                print(f"[NOVA] SUCCESS streaming: {model} ({len(lines_buffer)} lignes)", flush=True)
+                return True, lines_buffer
+            else:
+                print(f"[NOVA] Streaming vide pour {model}", flush=True)
+                return False, None
+
+        elif r.status_code == 410:
+            print(f"[NOVA] {model} retiré (410)", flush=True)
+            return False, None
+
+        elif r.status_code in (401, 403):
+            print(f"[NOVA] Auth error {r.status_code}", flush=True)
+            return "AUTH_ERROR", None
+
+        elif r.status_code == 429:
+            print(f"[NOVA] Rate limit {model}", flush=True)
+            time.sleep(2)
+            return False, None
+
+        else:
+            err = r.text[:200]
+            print(f"[NOVA] Erreur {r.status_code}: {err}", flush=True)
+            return False, None
+
+    except requests.exceptions.Timeout:
+        print(f"[NOVA] Timeout streaming: {model}", flush=True)
+        return False, None
+    except Exception as e:
+        print(f"[NOVA] Exception streaming: {str(e)[:100]}", flush=True)
+        return False, None
+
+
+def try_model_non_streaming(model, payload_base, headers):
+    """Fallback : essaie en non-streaming si le streaming échoue."""
+    payload = {**payload_base, "model": model, "stream": False}
+
+    try:
+        print(f"[NOVA] Essai non-streaming: {model}", flush=True)
+        r = requests.post(NVIDIA_URL, json=payload, headers=headers, timeout=(15, 120))
+
+        if r.status_code == 200:
+            data = r.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if content:
+                print(f"[NOVA] SUCCESS non-streaming: {model}", flush=True)
+                return True, content
+            else:
+                print(f"[NOVA] Non-streaming vide: {model}", flush=True)
+                return False, None
+        else:
+            print(f"[NOVA] Non-streaming erreur {r.status_code}", flush=True)
+            return False, None
+    except Exception as e:
+        print(f"[NOVA] Exception non-streaming: {str(e)[:100]}", flush=True)
+        return False, None
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -52,7 +139,7 @@ def chat():
     key = get_key()
     if not key or len(key) < 50:
         def err_gen():
-            yield b'data: {"error": "Cle API manquante. Verifiez NVIDIA_API_KEY dans Render."}\n\n'
+            yield b'data: {"error": "Cle API manquante."}\n\n'
         return Response(stream_with_context(err_gen()), mimetype="text/event-stream")
 
     data = request.get_json()
@@ -89,54 +176,51 @@ def chat():
     }
 
     def generate():
+        # Keepalive immédiat
         yield b": keepalive\n\n"
-        last_error = None
+
+        # ÉTAPE 1 : Streaming (essaie 2 fois par modèle)
         for model in MODELS:
-            for attempt in range(1, 4):
-                try:
-                    print(f"[NOVA] Tentative {attempt}/3 - {model}", flush=True)
-                    payload = {**payload_base, "model": model}
-                    r = requests.post(NVIDIA_URL, json=payload, headers=headers, stream=True, timeout=(15, 120))
+            for attempt in range(1, 3):
+                print(f"[NOVA] Tentative streaming {attempt}/2 - {model}", flush=True)
+                success, result = try_model(model, payload_base, headers)
 
-                    if r.status_code == 200:
-                        print(f"[NOVA] OK - {model}", flush=True)
-                        has_data = False
-                        for line in r.iter_lines():
-                            if line:
-                                has_data = True
-                                yield line + b"\n"
-                        if has_data:
-                            return
-                        last_error = "Reponse vide"
-                        continue
-                    elif r.status_code == 410:
-                        print(f"[NOVA] {model} retire (410)", flush=True)
-                        last_error = "Modele indisponible"
-                        break
-                    elif r.status_code in (401, 403):
-                        yield f'data: {{"error": "Cle API invalide."}}\n\n'.encode()
-                        return
-                    elif r.status_code == 429:
-                        import time
-                        time.sleep(2)
-                        last_error = "Limite atteinte"
-                        continue
-                    else:
-                        err = r.text[:150].replace('"', "'").replace("\n", " ")
-                        print(f"[NOVA] Erreur {r.status_code}: {err}", flush=True)
-                        last_error = f"HTTP {r.status_code}"
-                        continue
-                except requests.exceptions.Timeout:
-                    print(f"[NOVA] Timeout {model}", flush=True)
-                    last_error = "Timeout"
-                    continue
-                except Exception as e:
-                    print(f"[NOVA] Exception: {str(e)[:100]}", flush=True)
-                    last_error = str(e)[:100]
-                    continue
+                if success == "AUTH_ERROR":
+                    yield b'data: {"error": "Cle API invalide."}\n\n'
+                    return
 
-        err_msg = (last_error or "Service indisponible").replace('"', "'")
-        yield f'data: {{"error": "Service IA temporairement indisponible. {err_msg}"}}\n\n'.encode()
+                if success and result:
+                    for line in result:
+                        yield line
+                    return
+
+                # Si échec, on essaie le suivant
+                time.sleep(1)
+
+        # ÉTAPE 2 : Non-streaming en fallback (si tout le streaming a échoué)
+        print(f"[NOVA] === Fallback non-streaming ===", flush=True)
+        for model in MODELS:
+            success, content = try_model_non_streaming(model, payload_base, headers)
+            if success and content:
+                # Convertir en format SSE pour le frontend
+                import json as _json
+                # Découper le contenu en petits morceaux pour simuler le streaming
+                words = content.split(' ')
+                for i, word in enumerate(words):
+                    delta = word + (' ' if i < len(words) - 1 else '')
+                    chunk = {
+                        "choices": [{
+                            "delta": {"content": delta},
+                            "index": 0,
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {_json.dumps(chunk, ensure_ascii=False)}\n\n".encode('utf-8')
+                yield b"data: [DONE]\n\n"
+                return
+
+        # ÉTAPE 3 : Si vraiment rien ne marche
+        yield b'data: {"error": "Service IA indisponible. Reessayez dans quelques secondes."}\n\n'
 
     return Response(
         stream_with_context(generate()),
@@ -145,7 +229,6 @@ def chat():
     )
 
 
-# ============ IMPORTANT : sert nova.html + TOUTES les images ============
 @app.route("/")
 def index():
     return send_from_directory(".", "nova.html")
@@ -153,7 +236,6 @@ def index():
 
 @app.route("/<path:filename>")
 def static_files(filename):
-    """Sert logo.png, text.png, favicon.ico, etc."""
     return send_from_directory(".", filename)
 
 
