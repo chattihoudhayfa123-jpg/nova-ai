@@ -25,7 +25,7 @@ NVIDIA_CHAT_URL = f"{NVIDIA_BASE}/chat/completions"
 NVIDIA_IMAGE_BASE = "https://ai.api.nvidia.com/v1/genai"
 
 # ============================================================
-# MODES DE RÉPONSE (faible / moyen / max)
+# MODES DE RÉPONSE
 # ============================================================
 MODES = {
     "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
@@ -34,166 +34,19 @@ MODES = {
 }
 
 # ============================================================
-# CATALOGUE DES MODÈLES (TEXTE)
+# MODÈLE TEXTE (un seul, confirmé fonctionnel)
 # ============================================================
-TEXT_MODELS = {
-    "nvidia/nemotron-3.5-lightning-30b-a3b": {
-        "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "name": "Nemotron 3.5 Lightning",
-        "provider": "NVIDIA",
-        "description": "Modèle léger et ultra-rapide, idéal pour les conversations fluides.",
-        "context": "32K tokens",
-        "queue": "Très faible",
-        "speed": "★★★★★ (Ultra rapide)",
-        "efficiency": "★★★★☆",
-        "best_for": "Chat quotidien, réponses rapides",
-        "default": True,
-    },
-    "nvidia/llama-3.1-nemotron-70b-instruct": {
-        "id": "nvidia/llama-3.1-nemotron-70b-instruct",
-        "name": "Llama 3.1 Nemotron 70B",
-        "provider": "NVIDIA / Meta",
-        "description": "Grand modèle de raisonnement, excellent pour les tâches complexes.",
-        "context": "128K tokens",
-        "queue": "Modérée",
-        "speed": "★★★☆☆ (Moyen)",
-        "efficiency": "★★★★★",
-        "best_for": "Analyse, code, raisonnement complexe",
-        "default": False,
-    },
-    "meta/llama-3.1-8b-instruct": {
-        "id": "meta/llama-3.1-8b-instruct",
-        "name": "Llama 3.1 8B Instruct",
-        "provider": "Meta",
-        "description": "Petit modèle très rapide, bon compromis légèreté/qualité.",
-        "context": "128K tokens",
-        "queue": "Très faible",
-        "speed": "★★★★★ (Très rapide)",
-        "efficiency": "★★★☆☆",
-        "best_for": "Réponses courtes, tâches simples",
-        "default": False,
-    },
-    "meta/llama-3.2-11b-vision-instruct": {
-        "id": "meta/llama-3.2-11b-vision-instruct",
-        "name": "Llama 3.2 11B Vision",
-        "provider": "Meta",
-        "description": "Modèle multimodal qui comprend les images et le texte.",
-        "context": "128K tokens",
-        "queue": "Faible",
-        "speed": "★★★★☆",
-        "efficiency": "★★★★☆",
-        "best_for": "Analyse d'images, description visuelle",
-        "default": False,
-    },
-    "deepseek-ai/deepseek-r1-distill-llama-8b": {
-        "id": "deepseek-ai/deepseek-r1-distill-llama-8b",
-        "name": "DeepSeek R1 Distill 8B",
-        "provider": "DeepSeek",
-        "description": "Spécialisé dans le raisonnement étape par étape.",
-        "context": "64K tokens",
-        "queue": "Modérée",
-        "speed": "★★★☆☆",
-        "efficiency": "★★★★☆",
-        "best_for": "Maths, logique, réflexion structurée",
-        "default": False,
-    },
-}
+TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
 # ============================================================
-# CATALOGUE DES MODÈLES (IMAGE)
+# MODÈLE VISION (pour décrire les images)
 # ============================================================
-IMAGE_MODELS = {
-    "black-forest-labs/flux.2-klein-4b": {
-        "id": "black-forest-labs/flux.2-klein-4b",
-        "name": "FLUX.2 Klein 4B",
-        "provider": "Black Forest Labs",
-        "description": "Modèle distillé ultra-rapide (4 étapes), génération en quelques secondes.",
-        "steps": 4,
-        "queue": "Faible",
-        "speed": "★★★★★ (Éclair)",
-        "efficiency": "★★★★☆",
-        "best_for": "Génération rapide, style artistique",
-        "endpoint": f"{NVIDIA_IMAGE_BASE}/black-forest-labs/flux.2-klein-4b",
-        "payload_format": "flux",
-        "default": True,
-    },
-    "black-forest-labs/flux.1-schnell": {
-        "id": "black-forest-labs/flux.1-schnell",
-        "name": "FLUX.1 Schnell",
-        "provider": "Black Forest Labs",
-        "description": "Version rapide de FLUX.1, très bonne qualité en 4 étapes.",
-        "steps": 4,
-        "queue": "Élevée (très demandé)",
-        "speed": "★★★★☆",
-        "efficiency": "★★★★☆",
-        "best_for": "Qualité rapide, style photo",
-        "endpoint": f"{NVIDIA_IMAGE_BASE}/black-forest-labs/flux.1-schnell",
-        "payload_format": "flux",
-        "default": False,
-    },
-    "black-forest-labs/flux.1-dev": {
-        "id": "black-forest-labs/flux.1-dev",
-        "name": "FLUX.1 Dev",
-        "provider": "Black Forest Labs",
-        "description": "Modèle de haute qualité, meilleure fidélité au prompt.",
-        "steps": 50,
-        "queue": "Très élevée",
-        "speed": "★★☆☆☆ (Lent)",
-        "efficiency": "★★★★★",
-        "best_for": "Qualité maximale, prompts complexes",
-        "endpoint": f"{NVIDIA_IMAGE_BASE}/black-forest-labs/flux.1-dev",
-        "payload_format": "flux",
-        "default": False,
-    },
-    "stabilityai/stable-diffusion-3.5-large": {
-        "id": "stabilityai/stable-diffusion-3.5-large",
-        "name": "Stable Diffusion 3.5 Large",
-        "provider": "Stability AI",
-        "description": "Polyvalent, très bon rendu des détails et des textes.",
-        "steps": 30,
-        "queue": "Modérée",
-        "speed": "★★★☆☆",
-        "efficiency": "★★★★★",
-        "best_for": "Illustrations détaillées, texte dans l'image",
-        "endpoint": f"{NVIDIA_IMAGE_BASE}/stabilityai/stable-diffusion-3.5-large",
-        "payload_format": "sdxl",
-        "default": False,
-    },
-    "stabilityai/stable-diffusion-xl": {
-        "id": "stabilityai/stable-diffusion-xl",
-        "name": "Stable Diffusion XL",
-        "provider": "Stability AI",
-        "description": "Modèle classique et fiable, bon équilibre vitesse/qualité.",
-        "steps": 30,
-        "queue": "Faible",
-        "speed": "★★★★☆",
-        "efficiency": "★★★★☆",
-        "best_for": "Généraliste, portraits, paysages",
-        "endpoint": f"{NVIDIA_IMAGE_BASE}/stabilityai/stable-diffusion-xl",
-        "payload_format": "sdxl",
-        "default": False,
-    },
-    "qwen/qwen-image": {
-        "id": "qwen/qwen-image",
-        "name": "Qwen Image",
-        "provider": "Alibaba Qwen",
-        "description": "Spécialisé dans le rendu de texte multilingue dans l'image.",
-        "steps": 20,
-        "queue": "Faible",
-        "speed": "★★★★☆",
-        "efficiency": "★★★★☆",
-        "best_for": "Affiches, logos, texte dans l'image",
-        "endpoint": f"{NVIDIA_IMAGE_BASE}/qwen/qwen-image",
-        "payload_format": "flux",
-        "default": False,
-    },
-}
+VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
-# Modèle actif (par défaut)
-ACTIVE_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
-ACTIVE_IMAGE_MODEL = "black-forest-labs/flux.2-klein-4b"
-
-# Limite DURE de l'API FLUX.2 pour le prompt : 800 caractères
+# ============================================================
+# MODÈLE IMAGE (un seul, confirmé fonctionnel)
+# ============================================================
+IMAGE_MODEL_ENDPOINT = f"{NVIDIA_IMAGE_BASE}/black-forest-labs/flux.2-klein-4b"
 FLUX_MAX_PROMPT_LEN = 780
 
 CONNECT_TIMEOUT = 15
@@ -235,7 +88,7 @@ def _describe_image(data_url, max_words=250):
             "Réponds uniquement par la description."
         )
         payload = {
-            "model": "meta/llama-3.2-11b-vision-instruct",
+            "model": VISION_MODEL,
             "messages": [{
                 "role": "user",
                 "content": [
@@ -266,41 +119,6 @@ def _describe_image(data_url, max_words=250):
     except Exception as e:
         print(f"[NOVA][VISION EXCEPTION] {e}", flush=True)
         return ""
-
-
-# ============================================================
-# ROUTE : CATALOGUE DES MODÈLES
-# ============================================================
-@app.route("/api/models", methods=["GET"])
-def get_models():
-    return jsonify({
-        "text_models": list(TEXT_MODELS.values()),
-        "image_models": list(IMAGE_MODELS.values()),
-        "active_text_model": ACTIVE_TEXT_MODEL,
-        "active_image_model": ACTIVE_IMAGE_MODEL,
-    })
-
-
-@app.route("/api/models/select", methods=["POST"])
-def select_model():
-    global ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
-    data = request.get_json() or {}
-    model_type = data.get("type", "text")
-    model_id = data.get("model_id", "")
-
-    if model_type == "text":
-        if model_id not in TEXT_MODELS:
-            return {"error": "Modèle texte inconnu."}, 400
-        ACTIVE_TEXT_MODEL = model_id
-        print(f"[NOVA] Modèle texte actif : {ACTIVE_TEXT_MODEL}", flush=True)
-        return {"ok": True, "active": ACTIVE_TEXT_MODEL}
-    elif model_type == "image":
-        if model_id not in IMAGE_MODELS:
-            return {"error": "Modèle image inconnu."}, 400
-        ACTIVE_IMAGE_MODEL = model_id
-        print(f"[NOVA] Modèle image actif : {ACTIVE_IMAGE_MODEL}", flush=True)
-        return {"ok": True, "active": ACTIVE_IMAGE_MODEL}
-    return {"error": "Type inconnu."}, 400
 
 
 # ============================================================
@@ -335,7 +153,7 @@ def chat():
     )
 
     has_image = any(a.get("type") == "image" for a in attachments)
-    model = "meta/llama-3.2-11b-vision-instruct" if has_image else ACTIVE_TEXT_MODEL
+    model = VISION_MODEL if has_image else TEXT_MODEL
 
     trimmed = messages[-20:] if len(messages) > 20 else messages[:]
     final_messages = [{"role": "system", "content": system_prompt}]
@@ -552,27 +370,13 @@ def _run_image_job(job_id, user_prompt):
         IMAGE_JOBS[job_id]["status"] = "generating"
         IMAGE_JOBS[job_id]["progress"] = 30
 
-        model_info = IMAGE_MODELS.get(ACTIVE_IMAGE_MODEL, IMAGE_MODELS["black-forest-labs/flux.2-klein-4b"])
-        endpoint = model_info["endpoint"]
-        payload_format = model_info.get("payload_format", "flux")
-
-        if payload_format == "sdxl":
-            payload = {
-                "text_prompts": [{"text": final_prompt}],
-                "cfg_scale": 5.0,
-                "seed": 0,
-                "steps": model_info.get("steps", 30),
-                "width": 1024,
-                "height": 1024,
-            }
-        else:
-            payload = {
-                "prompt": final_prompt,
-                "width": 1024,
-                "height": 1024,
-                "steps": model_info.get("steps", 4),
-                "seed": 0,
-            }
+        payload = {
+            "prompt": final_prompt,
+            "width": 1024,
+            "height": 1024,
+            "steps": 4,
+            "seed": 0,
+        }
 
         headers = {
             "Authorization": f"Bearer {NVIDIA_API_KEY}",
@@ -580,7 +384,7 @@ def _run_image_job(job_id, user_prompt):
             "Content-Type": "application/json",
         }
 
-        r = requests.post(endpoint, json=payload, headers=headers, timeout=(20, 300))
+        r = requests.post(IMAGE_MODEL_ENDPOINT, json=payload, headers=headers, timeout=(20, 300))
         IMAGE_JOBS[job_id]["progress"] = 85
 
         if r.status_code != 200:
@@ -647,10 +451,9 @@ def debug():
         "key_present": bool(NVIDIA_API_KEY),
         "key_length": len(NVIDIA_API_KEY),
         "key_valid": NVIDIA_API_KEY.startswith("nvapi-") and len(NVIDIA_API_KEY) > 50,
-        "active_text_model": ACTIVE_TEXT_MODEL,
-        "active_image_model": ACTIVE_IMAGE_MODEL,
-        "text_models_count": len(TEXT_MODELS),
-        "image_models_count": len(IMAGE_MODELS),
+        "text_model": TEXT_MODEL,
+        "vision_model": VISION_MODEL,
+        "image_endpoint": IMAGE_MODEL_ENDPOINT,
         "pypdf_ok": PYPDF_OK,
     }
 
@@ -665,6 +468,8 @@ def static_files(filename):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"[NOVA] Cle API : {len(NVIDIA_API_KEY)} chars", flush=True)
-    print(f"[NOVA] Modèles texte : {len(TEXT_MODELS)}", flush=True)
-    print(f"[NOVA] Modèles image : {len(IMAGE_MODELS)}", flush=True)
+    print(f"[NOVA] Chat   : {TEXT_MODEL}", flush=True)
+    print(f"[NOVA] Vision : {VISION_MODEL}", flush=True)
+    print(f"[NOVA] Image  : {IMAGE_MODEL_ENDPOINT}", flush=True)
+    print(f"[NOVA] pypdf  : {PYPDF_OK}", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)
