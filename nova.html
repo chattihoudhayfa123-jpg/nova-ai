@@ -213,13 +213,27 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .msg{display:flex;gap:16px;padding:16px 0;animation:msgIn .35s cubic-bezier(.2,.9,.25,1) both;}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 
-.msg-ava{width:36px;height:36px;flex-shrink:0;display:grid;place-items:center;margin-top:2px;overflow:hidden;}
-.msg.ai .msg-ava img{width:100%;height:100%;object-fit:contain;transition:transform .3s;}
-.msg.ai:hover .msg-ava img{transform:rotate(-10deg) scale(1.05);}
+.msg-ava{width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;margin-top:2px;overflow:visible;}
 
-/* Rotation quand l'IA réfléchit */
-.msg.ai.thinking .msg-ava img{animation:spinLogo 1.8s linear infinite;}
-@keyframes spinLogo{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+/* ============================================================
+   LOGO IA — Rotation quand l'IA réfléchit
+============================================================ */
+.msg.ai .msg-ava img{
+  width:100%;height:100%;object-fit:contain;
+  transform-origin:center center;
+  transition:transform .3s;
+}
+.msg.ai:hover .msg-ava img{transform:rotate(-8deg) scale(1.08);}
+
+/* Rotation continue pendant la réflexion */
+.msg.ai.thinking .msg-ava img{
+  animation:novaSpin 1.6s linear infinite !important;
+}
+@keyframes novaSpin{
+  0%{transform:rotate(0deg) scale(1);}
+  50%{transform:rotate(180deg) scale(1.08);}
+  100%{transform:rotate(360deg) scale(1);}
+}
 
 .msg.user{flex-direction:row-reverse;}
 .msg.user .msg-ava{background:var(--sidebar);border:1px solid var(--border);border-radius:50%;}
@@ -303,20 +317,13 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .fab-mode .mdot{width:8px;height:8px;border-radius:50%;background:var(--text-3);}
 .fab-mode.active .mdot{background:#fff;}
 
-/* Bouton Mode — Rectangle */
+/* Bouton Mode — Rectangle (sans badge) */
 .fab-btn{padding:12px 22px;border-radius:12px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px var(--accent-glow);transition:all .25s cubic-bezier(.2,.9,.25,1);white-space:nowrap;position:relative;overflow:hidden;}
 .fab-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,.25) 50%,transparent 60%);transform:translateX(-100%);transition:transform .7s;}
 .fab-btn:hover::before{transform:translateX(100%);}
 .fab-btn:hover{background:var(--accent-hover);transform:translateY(-2px);box-shadow:0 12px 32px var(--accent-glow);}
 .fab-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:2;}
 .fab-btn span{position:relative;z-index:2;}
-
-/* SCROLL */
-.scroll-wrap{position:fixed;bottom:24px;right:110px;z-index:90;display:flex;flex-direction:column;gap:8px;}
-.scroll-btn{width:44px;height:44px;border-radius:11px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);cursor:pointer;display:grid;place-items:center;box-shadow:var(--shadow-md);transition:all .25s;opacity:0;visibility:hidden;transform:translateY(6px);}
-.scroll-btn.show{opacity:1;visibility:visible;transform:none;}
-.scroll-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
-.scroll-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 
 /* OVERLAYS */
 .overlay{position:fixed;inset:0;z-index:400;background:rgba(26,21,18,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:grid;place-items:center;padding:20px;opacity:0;visibility:hidden;transition:all .3s ease;}
@@ -422,7 +429,6 @@ body.dark .err{color:#fca5a5;}
   .user-pill .name{display:none;}
   .user-pill{padding:5px;}
   .fab-wrap{bottom:16px;right:16px;}
-  .scroll-wrap{bottom:16px;right:100px;}
   .fab-btn{padding:11px 16px;font-size:12.5px;}
   .suggestions{grid-template-columns:1fr;}
   .welcome-logo img.icon{width:70px;height:70px;}
@@ -627,12 +633,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </main>
 </div>
 
-<div class="scroll-wrap" id="scrollWrap" style="display:none;">
-  <button class="scroll-btn" id="scrollTop" title="Haut de page"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
-  <button class="scroll-btn" id="scrollBottom" title="Bas de page"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>
-</div>
-
-<!-- FAB MODE - SANS BADGE -->
+<!-- FAB MODE (sans badge MOY) -->
 <div class="fab-wrap" id="fabWrap" style="display:none;">
   <div class="fab-modes" id="fabModes">
     <button class="fab-mode" data-mode="max"><span class="mdot"></span>Max · Approfondi</button>
@@ -777,8 +778,6 @@ const sidebar = $('sidebar');
 const convList = $('convList');
 const fabBtn = $('fabBtn');
 const fabModes = $('fabModes');
-const scrollTopBtn = $('scrollTop');
-const scrollBottomBtn = $('scrollBottom');
 
 let currentUser = null;
 let currentMode = 'moyen';
@@ -802,7 +801,6 @@ function showApp(){
   setTimeout(() => {
     $('app').classList.add('active');
     $('fabWrap').style.display = 'flex';
-    $('scrollWrap').style.display = 'flex';
 
     if(!localStorage.getItem('nova_terms_accepted')){
       $('termsOverlay').classList.add('open');
@@ -1148,7 +1146,7 @@ function renderWelcome(){
 function addTyping(){
   const { wrap, body } = makeMsg('assistant');
   wrap.id = 'typing';
-  wrap.classList.add('thinking');
+  wrap.classList.add('thinking'); /* ← Déclenche rotation logo */
   body.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
   chatInner.appendChild(wrap);
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -1272,20 +1270,7 @@ fabBtn.addEventListener('click', e => { e.stopPropagation(); fabModes.classList.
 document.querySelectorAll('.fab-mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 document.addEventListener('click', e => { if(!e.target.closest('.fab-wrap')) fabModes.classList.remove('open'); });
 
-/* ============ SCROLL ============ */
-function updateScrollBtns(){
-  const s = chatEl.scrollHeight > chatEl.clientHeight + 100;
-  const top = chatEl.scrollTop < 100;
-  const bot = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 100;
-  scrollTopBtn.classList.toggle('show', s && !top);
-  scrollBottomBtn.classList.toggle('show', s && !bot);
-}
-chatEl.addEventListener('scroll', updateScrollBtns);
-scrollTopBtn.addEventListener('click', () => chatEl.scrollTo({ top: 0, behavior: 'smooth' }));
-scrollBottomBtn.addEventListener('click', () => chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' }));
-
 /* ============ SIDEBAR ============ */
-// Sidebar OUVERTE par défaut sur desktop
 $('menuBtn').addEventListener('click', () => {
   sidebar.classList.toggle('collapsed');
   if(window.innerWidth <= 768) $('backdrop').classList.toggle('show', !sidebar.classList.contains('collapsed'));
@@ -1318,11 +1303,10 @@ function checkLogin(){
 window.addEventListener('load', () => {
   loadSettings();
   setMode('moyen');
-  // Sidebar ouverte par défaut sur desktop, fermée sur mobile
+  // Sidebar OUVERTE par défaut sur desktop
   if(window.innerWidth <= 768){
     sidebar.classList.add('collapsed');
   }
-  // PAS de classe 'collapsed' par défaut → sidebar visible
 });
 
 window.addEventListener('resize', () => {
