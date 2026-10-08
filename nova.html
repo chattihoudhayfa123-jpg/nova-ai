@@ -205,7 +205,7 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .chat{flex:1;overflow-y:auto;scroll-behavior:smooth;}
 .chat::-webkit-scrollbar{width:8px;}
 .chat::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px;}
-.chat-inner{max-width:760px;margin:0 auto;padding:32px 24px 180px;}
+.chat-inner{max-width:760px;margin:0 auto;padding:32px 24px 200px;}
 
 .msg{display:flex;gap:16px;padding:16px 0;animation:msgIn .35s cubic-bezier(.2,.9,.25,1) both;}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -660,6 +660,162 @@ body.dark .err{color:#fca5a5;}
 }
 body.dark .img-error { color: #fca5a5; }
 
+/* ============================================================
+   UPLOAD DE FICHIERS
+============================================================ */
+.attach-btn {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: all .2s;
+}
+.attach-btn:hover {
+  background: var(--sidebar-hover);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.attach-btn svg {
+  width: 17px; height: 17px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.attachments-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.attachments-bar:empty { display: none; }
+
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--text);
+  max-width: 260px;
+  box-shadow: var(--shadow-sm);
+  animation: chipIn .25s cubic-bezier(.2,.9,.25,1) both;
+}
+@keyframes chipIn {
+  from { opacity: 0; transform: translateY(4px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+.attach-chip.uploading { opacity: .7; }
+.attach-chip.error { border-color: #dc2626; color: #dc2626; }
+
+.attach-thumb {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.attach-icon {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.attach-icon svg {
+  width: 15px; height: 15px;
+  stroke: var(--accent); fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.attach-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  font-weight: 500;
+}
+.attach-size { font-size: 11px; color: var(--text-3); }
+
+.attach-remove {
+  width: 20px; height: 20px;
+  border: none; background: transparent;
+  color: var(--text-3); cursor: pointer;
+  display: grid; place-items: center;
+  border-radius: 4px;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.attach-remove:hover { background: var(--sidebar-hover); color: #dc2626; }
+.attach-remove svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2.4; stroke-linecap: round;
+}
+
+/* Messages : affichage des pièces jointes dans le chat */
+.msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.msg-attach-img {
+  max-width: 240px;
+  max-height: 200px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform .2s;
+}
+.msg-attach-img:hover { transform: scale(1.02); }
+.msg-attach-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.msg-attach-file svg {
+  width: 14px; height: 14px;
+  stroke: var(--accent); fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Drag & drop sur le composer */
+.composer.dragging .input-box {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.composer.dragging::before {
+  content: '📎 Déposez vos fichiers ici';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: var(--shadow-lg);
+}
+
 @media(max-width:768px){
   .landing-nav{padding:14px 20px;}
   .landing-nav-links{display:none;}
@@ -673,7 +829,7 @@ body.dark .img-error { color: #fca5a5; }
   .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:80;box-shadow:var(--shadow-xl);}
   .sidebar:not(.collapsed){margin-left:0;}
   .sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w));}
-  .chat-inner{padding:20px 16px 180px;}
+  .chat-inner{padding:20px 16px 200px;}
   .composer{padding:10px 16px 16px;}
   .topbar{padding:0 14px;}
   .ai-status{display:none;}
@@ -687,6 +843,7 @@ body.dark .img-error { color: #fca5a5; }
   .code-copy span{display:none;}
   .code-copy{padding:5px 7px;}
   .img-result, .img-loading{max-width:100%;}
+  .attach-chip{max-width:220px;}
 }
 @media(min-width:769px){.backdrop{display:none!important;}}
 
@@ -767,14 +924,14 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
         <p>Créez des images à partir d'une simple description.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></div>
+        <h3>Upload de fichiers</h3>
+        <p>PDF, images, code — glissez-déposez pour analyser.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
         <h3>3 modes d'intelligence</h3>
         <p>Faible, Moyen ou Max selon vos besoins.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-        <h3>Historique illimité</h3>
-        <p>Toutes vos conversations sont sauvegardées.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
@@ -860,7 +1017,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
       <div class="chat-inner" id="chatInner"></div>
     </div>
 
-    <div class="composer">
+    <div class="composer" id="composer">
       <div class="composer-inner">
         <div class="gen-mode-toggle">
           <button class="gen-mode-btn active" data-gen="chat" type="button">
@@ -872,7 +1029,13 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
             Image
           </button>
         </div>
+        <div class="attachments-bar" id="attachmentsBar"></div>
         <div class="input-box">
+          <button class="attach-btn" id="attachBtn" title="Joindre un fichier" type="button">
+            <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <input type="file" id="fileInput" style="display:none;" multiple
+                 accept=".txt,.md,.csv,.json,.xml,.html,.py,.js,.ts,.css,.yml,.yaml,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,text/*">
           <textarea id="input" rows="1" placeholder="Écrivez un message..."></textarea>
           <button class="send-btn" id="sendBtn" disabled>
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -1004,6 +1167,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 <script>
 const API_URL = '/api/chat';
 const IMAGE_API_URL = '/api/image';
+const UPLOAD_URL = '/api/upload';
 const $ = id => document.getElementById(id);
 
 const chatEl = $('chat');
@@ -1023,6 +1187,102 @@ let currentConvId = null;
 let isLoading = false;
 let authTab = 'login';
 let abortCtrl = null;
+
+/* ============================================================
+   UPLOAD DE FICHIERS
+============================================================ */
+let pendingAttachments = [];
+
+function formatSize(bytes){
+  if (bytes < 1024) return bytes + ' o';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' Ko';
+  return (bytes/1024/1024).toFixed(2) + ' Mo';
+}
+
+function fileExt(name){
+  const i = name.lastIndexOf('.');
+  return i === -1 ? '' : name.slice(i).toLowerCase();
+}
+
+function renderAttachmentsBar(){
+  const bar = $('attachmentsBar');
+  bar.innerHTML = '';
+  pendingAttachments.forEach(att => {
+    const chip = document.createElement('div');
+    chip.className = 'attach-chip' + (att.uploading ? ' uploading' : '') + (att.error ? ' error' : '');
+
+    let inner = '';
+    if (att.type === 'image' && att.data_url) {
+      inner = `<img class="attach-thumb" src="${att.data_url}" alt="">`;
+    } else if (att.uploading) {
+      inner = `<div class="attach-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="28 14"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg></div>`;
+    } else {
+      inner = `<div class="attach-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>`;
+    }
+
+    chip.innerHTML = `
+      ${inner}
+      <div style="min-width:0;">
+        <div class="attach-name">${escapeHtml(att.filename)}</div>
+        <div class="attach-size">${att.error ? escapeHtml(att.error) : (att.uploading ? 'Chargement…' : formatSize(att.size || 0))}</div>
+      </div>
+      <button class="attach-remove" type="button" title="Retirer">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>`;
+    chip.querySelector('.attach-remove').addEventListener('click', () => {
+      pendingAttachments = pendingAttachments.filter(a => a.id !== att.id);
+      renderAttachmentsBar();
+    });
+    bar.appendChild(chip);
+  });
+  if (typeof updateSendBtn === 'function') updateSendBtn();
+}
+
+async function uploadFile(file){
+  const id = 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+  const att = { id, filename: file.name, size: file.size, uploading: true };
+  pendingAttachments.push(att);
+  renderAttachmentsBar();
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const res = await fetch(UPLOAD_URL, { method: 'POST', body: fd });
+    const data = await res.json();
+    const idx = pendingAttachments.findIndex(a => a.id === id);
+    if (idx === -1) return;
+    if (!res.ok || data.error) {
+      pendingAttachments[idx] = { ...att, uploading: false, error: data.error || ('Erreur ' + res.status) };
+    } else {
+      pendingAttachments[idx] = {
+        id,
+        filename: data.filename,
+        size: data.size,
+        type: data.type,
+        content: data.content,
+        data_url: data.data_url,
+        truncated: data.truncated,
+        uploading: false,
+      };
+    }
+  } catch(e) {
+    const idx = pendingAttachments.findIndex(a => a.id === id);
+    if (idx !== -1) pendingAttachments[idx] = { ...att, uploading: false, error: e.message };
+  }
+  renderAttachmentsBar();
+}
+
+async function handleFiles(fileList){
+  const files = Array.from(fileList || []);
+  for (const f of files) {
+    if (f.size > 15 * 1024 * 1024) {
+      alert(`"${f.name}" dépasse 15 Mo.`);
+      continue;
+    }
+    await uploadFile(f);
+  }
+}
 
 /* ============ FETCH AVEC RETRY (anti cold-start Render) ============ */
 async function fetchWithRetry(url, options, maxRetries = 3) {
@@ -1118,13 +1378,18 @@ const saveConvs = () => {
   try {
     localStorage.setItem(convKey(), JSON.stringify(conversations));
   } catch(e) {
-    console.warn('localStorage plein, nettoyage des anciennes images...', e);
+    console.warn('localStorage plein, nettoyage...', e);
     conversations.forEach(c => {
       c.messages.forEach(m => {
         if (m.isImage) {
           delete m.image;
           m.content = '[Image générée — non sauvegardée]';
           m.isImage = false;
+        }
+        if (m.attachments) {
+          m.attachments.forEach(a => {
+            if (a.type === 'image') delete a.data_url;
+          });
         }
       });
     });
@@ -1216,6 +1481,7 @@ function logout(){
   currentUser = null; conversations = []; currentConvId = null;
   localStorage.removeItem('nova_currentUser');
   chatInner.innerHTML = ''; convList.innerHTML = '';
+  pendingAttachments = []; renderAttachmentsBar();
   $('userPill').style.display = 'none';
   checkLogin();
 }
@@ -1225,7 +1491,7 @@ $('logoutBtn').addEventListener('click', logout);
 function createNewConv(){
   if(abortCtrl){ abortCtrl.abort(); abortCtrl = null; }
   isLoading = false; removeTyping();
-  sendBtn.disabled = inputEl.value.trim() === '';
+  updateSendBtn();
   const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
   conversations.push({ id, title: 'Nouvelle conversation', messages: [], created: Date.now() });
   currentConvId = id;
@@ -1254,7 +1520,7 @@ function renderConvs(){
 function switchConv(id){
   if(abortCtrl){ abortCtrl.abort(); abortCtrl = null; }
   isLoading = false; removeTyping();
-  sendBtn.disabled = inputEl.value.trim() === '';
+  updateSendBtn();
   currentConvId = id;
   renderConvs(); renderCurrent();
   if(window.innerWidth <= 768){ sidebar.classList.add('collapsed'); $('backdrop').classList.remove('show'); }
@@ -1391,6 +1657,29 @@ function makeMsg(role){
   return { wrap, body };
 }
 
+function renderAttachmentsInMsg(container, attachments){
+  if (!attachments || !attachments.length) return;
+  const attsDiv = document.createElement('div');
+  attsDiv.className = 'msg-attachments';
+  attachments.forEach(a => {
+    if (a.type === 'image' && a.data_url) {
+      const img = document.createElement('img');
+      img.src = a.data_url;
+      img.className = 'msg-attach-img';
+      img.alt = a.filename;
+      img.title = 'Cliquer pour agrandir';
+      img.addEventListener('click', () => window.open(a.data_url, '_blank'));
+      attsDiv.appendChild(img);
+    } else {
+      const fileEl = document.createElement('div');
+      fileEl.className = 'msg-attach-file';
+      fileEl.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>${escapeHtml(a.filename)}</span>${a.size ? `<span style="color:var(--text-3);font-size:11px;">${formatSize(a.size)}</span>` : ''}`;
+      attsDiv.appendChild(fileEl);
+    }
+  });
+  container.appendChild(attsDiv);
+}
+
 function renderCurrent(){
   chatInner.innerHTML = '';
   const c = getCurrent();
@@ -1403,6 +1692,9 @@ function renderCurrent(){
     } else {
       body.innerHTML = renderMD(m.content);
       enhanceCodeBlocks(body);
+    }
+    if (m.attachments && m.attachments.length) {
+      renderAttachmentsInMsg(body, m.attachments);
     }
     chatInner.appendChild(wrap);
   });
@@ -1456,6 +1748,12 @@ function addTyping(){
 }
 function removeTyping(){ const t = $('typing'); if(t) t.remove(); }
 function autoResize(){ inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 220) + 'px'; }
+
+function updateSendBtn(){
+  const hasText = inputEl.value.trim() !== '';
+  const hasAtts = pendingAttachments.some(a => !a.uploading && !a.error);
+  sendBtn.disabled = (!hasText && !hasAtts) || isLoading;
+}
 
 /* ============================================================
    GENERATION D'IMAGE avec animation + pourcentage
@@ -1527,7 +1825,6 @@ async function sendImageMsg(text){
   let pollTimer = null;
 
   try {
-    // 1) Lancer le job
     const startRes = await fetchWithRetry(IMAGE_API_URL + '/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1543,10 +1840,9 @@ async function sendImageMsg(text){
     const { job_id } = await startRes.json();
     if (!job_id) throw new Error('Job ID non reçu.');
 
-    // 2) Poller toutes les 2s
     const finalImage = await new Promise((resolve, reject) => {
       let attempts = 0;
-      const maxAttempts = 90; // 3 minutes max
+      const maxAttempts = 90;
 
       pollTimer = setInterval(async () => {
         attempts++;
@@ -1612,7 +1908,7 @@ async function sendImageMsg(text){
     if (pollTimer) clearInterval(pollTimer);
     if (currentConvId === startId) {
       isLoading = false;
-      sendBtn.disabled = inputEl.value.trim() === '';
+      updateSendBtn();
       inputEl.focus();
     }
     abortCtrl = null;
@@ -1622,7 +1918,9 @@ async function sendImageMsg(text){
 /* ============ SEND MESSAGE ============ */
 async function sendMsg(text){
   text = text.trim();
-  if(!text || isLoading || !currentUser) return;
+  if(!currentUser || isLoading) return;
+  const hasAtts = pendingAttachments.some(a => !a.uploading && !a.error);
+  if (!text && !hasAtts) return;
 
   if (currentGenMode === 'image') {
     return sendImageMsg(text);
@@ -1631,13 +1929,32 @@ async function sendMsg(text){
   const w = chatInner.querySelector('.welcome'); if(w) w.remove();
   const conv = getCurrent(); if(!conv) return;
 
+  // Récupère les pièces jointes valides AVANT de vider pendingAttachments
+  const attsAtSend = pendingAttachments.filter(a => !a.uploading && !a.error);
+
   const { wrap: uw, body: ub } = makeMsg('user');
-  ub.textContent = text;
+  if (text) ub.textContent = text;
+  if (attsAtSend.length) {
+    renderAttachmentsInMsg(ub, attsAtSend.map(a => ({
+      type: a.type, filename: a.filename, size: a.size,
+      data_url: a.type === 'image' ? a.data_url : undefined
+    })));
+  }
   chatInner.appendChild(uw);
   chatEl.scrollTop = chatEl.scrollHeight;
-  conv.messages.push({ role: 'user', content: text });
+
+  const userMsg = { role: 'user', content: text || '' };
+  if (attsAtSend.length) {
+    userMsg.attachments = attsAtSend.map(a => ({
+      type: a.type, filename: a.filename, size: a.size,
+      data_url: a.type === 'image' ? a.data_url : undefined
+    }));
+  }
+  conv.messages.push(userMsg);
+
   if(conv.messages.length === 1){
-    conv.title = text.length > 34 ? text.slice(0,34) + '...' : text;
+    const t = text || (attsAtSend[0]?.filename) || 'Pièce jointe';
+    conv.title = t.length > 34 ? t.slice(0,34) + '...' : t;
     renderConvs();
   }
   saveConvs();
@@ -1647,6 +1964,10 @@ async function sendMsg(text){
   sendBtn.disabled = true;
   isLoading = true;
   addTyping();
+
+  // Vide la barre de pièces jointes après envoi
+  pendingAttachments = [];
+  renderAttachmentsBar();
 
   const startId = currentConvId;
   abortCtrl = new AbortController();
@@ -1671,7 +1992,13 @@ async function sendMsg(text){
       body: JSON.stringify({
         mode: currentMode,
         messages: conv.messages.slice(-20),
-        config: { aiName: settings.aiName, personality: settings.personality }
+        config: { aiName: settings.aiName, personality: settings.personality },
+        attachments: attsAtSend.map(a => ({
+          type: a.type,
+          filename: a.filename,
+          content: a.content,
+          data_url: a.data_url
+        }))
       }),
       signal: abortCtrl.signal
     });
@@ -1761,16 +2088,54 @@ async function sendMsg(text){
     clearTimeout(wakeTimeout);
     if(currentConvId === startId){
       isLoading = false;
-      sendBtn.disabled = inputEl.value.trim() === '';
+      updateSendBtn();
       inputEl.focus();
     }
     abortCtrl = null;
   }
 }
 
-inputEl.addEventListener('input', () => { autoResize(); sendBtn.disabled = inputEl.value.trim() === '' || isLoading; });
+inputEl.addEventListener('input', () => { autoResize(); updateSendBtn(); });
 inputEl.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMsg(inputEl.value); } });
 sendBtn.addEventListener('click', () => sendMsg(inputEl.value));
+
+/* ============ UPLOAD : bouton + drag&drop + paste ============ */
+$('attachBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  handleFiles(e.target.files);
+  e.target.value = '';
+});
+
+const composerEl = $('composer');
+['dragenter','dragover'].forEach(evt =>
+  composerEl.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    composerEl.classList.add('dragging');
+  })
+);
+['dragleave','drop'].forEach(evt =>
+  composerEl.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    if (evt === 'dragleave' && composerEl.contains(e.relatedTarget)) return;
+    composerEl.classList.remove('dragging');
+  })
+);
+composerEl.addEventListener('drop', e => {
+  const dt = e.dataTransfer;
+  if (dt && dt.files && dt.files.length) handleFiles(dt.files);
+});
+
+inputEl.addEventListener('paste', e => {
+  const items = (e.clipboardData || {}).items || [];
+  const files = [];
+  for (const it of items) {
+    if (it.kind === 'file') {
+      const f = it.getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (files.length) { e.preventDefault(); handleFiles(files); }
+});
 
 /* ============ TOGGLE CHAT / IMAGE ============ */
 document.querySelectorAll('.gen-mode-btn').forEach(b => {
@@ -1828,6 +2193,8 @@ function checkLogin(){
 window.addEventListener('load', () => {
   loadSettings();
   setMode('moyen');
+  renderAttachmentsBar();
+  updateSendBtn();
   if(window.innerWidth <= 768) sidebar.classList.add('collapsed');
 });
 
