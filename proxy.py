@@ -1,37 +1,27 @@
 import os
 import json
+import time
 from datetime import datetime
 from flask import Flask, request, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 import requests
 
-# ============ DIAGNOSTIC AU DEMARRAGE ============
-print("=" * 60, flush=True)
-print("[NOVA BOOT] Verification de la cle API NVIDIA...", flush=True)
-print(f"[NOVA BOOT] NVIDIA_API_KEY present dans env : {'NVIDIA_API_KEY' in os.environ}", flush=True)
-_val = os.environ.get("NVIDIA_API_KEY", "")
-print(f"[NOVA BOOT] Longueur de la cle : {len(_val)}", flush=True)
-print(f"[NOVA BOOT] Commence par nvapi- : {_val.startswith('nvapi-')}", flush=True)
-print("=" * 60, flush=True)
-# =================================================
-
 app = Flask(__name__)
 CORS(app)
 
-NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "").strip()
+NVIDIA_API_KEY = os.environ.get("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", "").strip()
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
+# Liste de modèles de secours (essayés dans l'ordre si le premier échoue)
+MODELS = [
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "meta/llama-3.3-70b-instruct",
+    "mistralai/mistral-nemo-12b-instruct",
+]
 
-@app.route("/debug")
-def debug():
-    val = os.environ.get("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", "")
-    return {
-        "NVIDIA_API_KEY_in_env": "NVIDIA_API_KEY" in os.environ,
-        "length": len(val),
-        "starts_with_nvapi": val.startswith("nvapi-"),
-        "first_10_chars": val[:10] if val else "",
-        "last_5_chars": val[-5:] if val else ""
-    }
+print("=" * 60, flush=True)
+print(f"[NOVA BOOT] Cle API : {'OK' if NVIDIA_API_KEY else 'MANQUANTE'} ({len(NVIDIA_API_KEY)} chars)", flush=True)
+print("=" * 60, flush=True)
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -51,9 +41,9 @@ def chat():
     mode = data.get("mode", "moyen")
 
     mode_config = {
-        "faible": {"max": 1500, "suffix": " Reponds de facon concise."},
-        "moyen":  {"max": 3000, "suffix": " Sois clair et equilibre."},
-        "max":    {"max": 8192, "suffix": " Analyse en profondeur."}
+        "faible": {"max": 1000, "suffix": " Reponds de facon concise."},
+        "moyen":  {"max": 2500, "suffix": " Sois clair et equilibre."},
+        "max":    {"max": 4000, "suffix": " Analyse en profondeur."}
     }
     m_config = mode_config.get(mode, mode_config["moyen"])
     max_tokens = min(max_tokens, m_config["max"])
@@ -68,7 +58,6 @@ def chat():
     )
 
     payload = {
-        "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
         "messages": [{"role": "system", "content": system_prompt}, *messages],
         "temperature": temperature,
         "top_p": 0.95,
@@ -82,20 +71,66 @@ def chat():
     }
 
     def generate():
-        try:
-            with requests.post(NVIDIA_URL, json=payload, headers=headers, stream=True, timeout=300) as r:
-                if r.status_code != 200:
-                    err = r.text[:300].replace('"', "'").replace("\n", " ")
-                    yield f'data: {{"error": "API {r.status_code}: {err}"}}\n\n'.encode("utf-8")
-                    return
-                for line in r.iter_lines():
-                    if line:
-                        yield line + b"\n"
-        except Exception as e:
-            err = str(e).replace('"', "'").replace("\n", " ")
-            yield f'data: {{"error": "Erreur serveur : {err}"}}\n\n'.encode("utf-8")
+        # Send a keepalive immediately so the browser knows connection is alive
+        yield b": keepalive\n\n"
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        # Try each model in order
+        last_error = None
+        for model in MODELS:
+            try:
+                payload["model"] = model
+                print(f"[NOVA] Tentative avec modele: {model}", flush=True)
+
+                with requests.post(
+                    NVIDIA_URL,
+                    json=payload,
+                    headers=headers,
+                    stream=True,
+                    timeout=(10, 90)  # (connection timeout, read timeout)
+                ) as r:
+                    if r.status_code != 200:
+                        err = r.text[:300].replace('"', "'").replace("\n", " ")
+                        print(f"[NOVA] Echec {model} : {r.status_code} - {err}", flush=True)
+                        last_error = f"API {r.status_code}: {err}"
+                        continue  # Try next model
+
+                    # Success - stream the response
+                    print(f"[NOVA] Succes avec: {model}", flush=True)
+                    got_data = False
+                    for line in r.iter_lines():
+                        if line:
+                            got_data = True
+                            yield line + b"\n"
+
+                    if got_data:
+                        return  # Done successfully
+
+                    print(f"[NOVA] {model} : aucun contenu recu", flush=True)
+                    last_error = "Aucune reponse du modele"
+
+            except requests.exceptions.Timeout:
+                print(f"[NOVA] Timeout avec {model}", flush=True)
+                last_error = f"Timeout sur {model}"
+            except requests.exceptions.ConnectionError as e:
+                print(f"[NOVA] Erreur connexion avec {model}: {e}", flush=True)
+                last_error = f"Erreur connexion"
+            except Exception as e:
+                print(f"[NOVA] Erreur {model}: {e}", flush=True)
+                last_error = str(e)
+
+        # All models failed
+        err_msg = (last_error or "Tous les modeles ont echoue").replace('"', "'")
+        yield f'data: {{"error": "Service indisponible. {err_msg}"}}\n\n'.encode("utf-8")
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @app.route("/")
