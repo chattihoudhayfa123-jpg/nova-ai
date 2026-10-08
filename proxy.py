@@ -44,9 +44,7 @@ MODES = {
 # ============================================================
 # CATALOGUE CURÉ — Modèles principaux uniquement
 # ============================================================
-# Structure : id -> {name, category, description, best_for}
 CURATED_TEXT_MODELS = {
-    # -------- RAPIDES --------
     "nvidia/nemotron-3.5-lightning-30b-a3b": {
         "name": "Nemotron 3.5 Lightning",
         "category": "⚡ Rapide",
@@ -61,7 +59,6 @@ CURATED_TEXT_MODELS = {
         "description": "Léger et très rapide, parfait pour les tâches simples.",
         "best_for": "Réponses courtes, questions simples",
     },
-    # -------- ÉQUILIBRÉS --------
     "meta/llama-3.3-70b-instruct": {
         "name": "Llama 3.3 70B",
         "category": "⚖️ Équilibré",
@@ -76,7 +73,6 @@ CURATED_TEXT_MODELS = {
         "description": "Grand modèle NVIDIA, très bon en raisonnement.",
         "best_for": "Analyse, rédaction, code",
     },
-    # -------- PUISSANTS --------
     "nvidia/nemotron-4-340b-instruct": {
         "name": "Nemotron 4 340B",
         "category": "💪 Puissant",
@@ -84,7 +80,6 @@ CURATED_TEXT_MODELS = {
         "description": "Le plus puissant du catalogue, pour les tâches complexes.",
         "best_for": "Recherche, raisonnement avancé, code complexe",
     },
-    # -------- MULTITÂCHE (vision) --------
     "meta/llama-3.2-11b-vision-instruct": {
         "name": "Llama 3.2 Vision 11B",
         "category": "🎨 Multitâche",
@@ -99,7 +94,6 @@ CURATED_TEXT_MODELS = {
         "description": "Version puissante de Vision, analyse fine des images.",
         "best_for": "Analyse d'images complexe, OCR avancé",
     },
-    # -------- RAISONNEMENT --------
     "deepseek-ai/deepseek-r1": {
         "name": "DeepSeek R1",
         "category": "🧠 Raisonnement",
@@ -109,7 +103,6 @@ CURATED_TEXT_MODELS = {
     },
 }
 
-# Modèles image principaux
 CURATED_IMAGE_MODELS = {
     "black-forest-labs/flux.2-klein-4b": {
         "name": "FLUX.2 Klein 4B",
@@ -134,7 +127,6 @@ CURATED_IMAGE_MODELS = {
     },
 }
 
-# Catalogue dynamique (sera filtré)
 TEXT_MODELS = {}
 IMAGE_MODELS = {}
 ACTIVE_TEXT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
@@ -148,7 +140,7 @@ IMAGE_JOBS = {}
 
 
 # ============================================================
-# CATALOGUE DYNAMIQUE (filtré)
+# CATALOGUE DYNAMIQUE
 # ============================================================
 def _classify_model(model_id):
     mid = model_id.lower()
@@ -174,9 +166,6 @@ def _build_model_entry(mid, curated_info, kind):
         "category_key": curated_info.get("category_key", ""),
         "description": curated_info.get("description", "Modèle disponible via l'API NVIDIA."),
         "best_for": curated_info.get("best_for", ""),
-        "queue": "Variable",
-        "speed": "Variable",
-        "efficiency": "Variable",
         "default": False,
     }
     if kind == "image":
@@ -187,7 +176,6 @@ def _build_model_entry(mid, curated_info, kind):
 
 
 def fetch_nvidia_models():
-    """Récupère la liste réelle et la filtre au catalogue curé."""
     global TEXT_MODELS, IMAGE_MODELS
     if not NVIDIA_API_KEY:
         return
@@ -205,7 +193,6 @@ def fetch_nvidia_models():
         available_ids = {m.get("id", "") for m in models}
         print(f"[NOVA] {len(available_ids)} modèles disponibles chez NVIDIA.", flush=True)
 
-        # Filtre : ne garde que les modèles curés qui existent réellement
         text_models = {}
         for mid, info in CURATED_TEXT_MODELS.items():
             if mid in available_ids:
@@ -220,7 +207,6 @@ def fetch_nvidia_models():
             else:
                 print(f"[NOVA] ⚠ Image absente : {mid}", flush=True)
 
-        # Fallback : si aucun modèle curé n'est disponible, prend le premier disponible
         if not text_models:
             for m in models:
                 mid = m.get("id", "")
@@ -231,6 +217,7 @@ def fetch_nvidia_models():
         TEXT_MODELS = text_models
         IMAGE_MODELS = image_models
 
+        global ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
         if ACTIVE_TEXT_MODEL not in TEXT_MODELS and TEXT_MODELS:
             ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
         if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS and IMAGE_MODELS:
@@ -245,86 +232,116 @@ fetch_nvidia_models()
 
 
 # ============================================================
-# RECHERCHE WEB (DuckDuckGo, gratuit, sans clé)
+# RECHERCHE WEB (DuckDuckGo)
 # ============================================================
-def web_search(query, max_results=3):
-    """Recherche web via DuckDuckGo HTML (gratuit). Retourne une liste {title, url, snippet, content}."""
+def web_search(query, max_results=4):
+    """
+    Recherche web via DuckDuckGo (lite puis html).
+    Retourne une liste de {title, url, snippet, content}.
+    """
     if not query.strip():
         return []
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+    }
+
+    results = []
+
+    # --- ESSAI 1 : DuckDuckGo Lite ---
     try:
-        # 1. Recherche
-        r = requests.get(
-            "https://html.duckduckgo.com/html/",
-            params={"q": query},
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-            },
+        r = requests.post(
+            "https://lite.duckduckgo.com/lite/",
+            data={"q": query},
+            headers=headers,
             timeout=15
         )
-        if r.status_code != 200:
-            print(f"[NOVA][SEARCH] DDG status {r.status_code}", flush=True)
-            return []
-
-        results = []
-        if BS4_OK:
+        if r.status_code == 200 and BS4_OK:
             soup = BeautifulSoup(r.text, "html.parser")
-            for el in soup.select(".result")[:max_results]:
-                a = el.select_one(".result__a")
-                snippet_el = el.select_one(".result__snippet")
-                if not a:
-                    continue
+            for a in soup.find_all("a", class_="result-link")[:max_results]:
                 url = a.get("href", "")
-                # DDG enveloppe les URLs : //duckduckgo.com/l/?uddg=<vraie_url>
                 if "uddg=" in url:
                     m = re.search(r"uddg=([^&]+)", url)
                     if m:
                         url = unquote(m.group(1))
-                results.append({
-                    "title": a.get_text(strip=True),
-                    "url": url,
-                    "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
-                })
-        else:
-            # Fallback regex basique si BeautifulSoup absent
-            for m in re.finditer(r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', r.text)[:max_results]:
-                url = m.group(1)
-                if "uddg=" in url:
-                    m2 = re.search(r"uddg=([^&]+)", url)
-                    if m2:
-                        url = unquote(m2.group(1))
-                results.append({"title": re.sub(r"<[^>]+>", "", m.group(2)), "url": url, "snippet": ""})
-
-        print(f"[NOVA][SEARCH] '{query[:50]}' -> {len(results)} résultats", flush=True)
-
-        # 2. Extraction rapide du contenu (2 premiers résultats)
-        for i, res in enumerate(results[:2]):
-            try:
-                rr = requests.get(
-                    res["url"],
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; NOVA/1.0)"},
-                    timeout=8
-                )
-                if rr.status_code == 200:
-                    if BS4_OK:
-                        s = BeautifulSoup(rr.text, "html.parser")
-                        for tag in s(["script", "style", "nav", "footer", "header", "aside"]):
-                            tag.decompose()
-                        text = " ".join(s.get_text(separator=" ").split())
-                    else:
-                        text = re.sub(r"<[^>]+>", " ", rr.text)
-                        text = " ".join(text.split())
-                    res["content"] = text[:1500]
-                else:
-                    res["content"] = res.get("snippet", "")
-            except Exception as e:
-                res["content"] = res.get("snippet", "")
-
-        return results
+                title = a.get_text(strip=True)
+                snippet = ""
+                parent_tr = a.find_parent("tr")
+                if parent_tr:
+                    next_tr = parent_tr.find_next_sibling("tr")
+                    if next_tr:
+                        snip_el = next_tr.find("td", class_="result-snippet")
+                        if snip_el:
+                            snippet = snip_el.get_text(strip=True)
+                if title and url:
+                    results.append({"title": title, "url": url, "snippet": snippet})
+        print(f"[NOVA][SEARCH-LITE] '{query[:40]}' -> {len(results)} résultats", flush=True)
     except Exception as e:
-        print(f"[NOVA][SEARCH] Exception : {e}", flush=True)
+        print(f"[NOVA][SEARCH-LITE] Exception : {e}", flush=True)
+
+    # --- ESSAI 2 : DuckDuckGo HTML (fallback) ---
+    if not results:
+        try:
+            r = requests.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers=headers,
+                timeout=15
+            )
+            if r.status_code == 200 and BS4_OK:
+                soup = BeautifulSoup(r.text, "html.parser")
+                for el in soup.select(".result")[:max_results]:
+                    a = el.select_one(".result__a")
+                    snip = el.select_one(".result__snippet")
+                    if not a:
+                        continue
+                    url = a.get("href", "")
+                    if "uddg=" in url:
+                        m = re.search(r"uddg=([^&]+)", url)
+                        if m:
+                            url = unquote(m.group(1))
+                    results.append({
+                        "title": a.get_text(strip=True),
+                        "url": url,
+                        "snippet": snip.get_text(strip=True) if snip else "",
+                    })
+            print(f"[NOVA][SEARCH-HTML] '{query[:40]}' -> {len(results)} résultats", flush=True)
+        except Exception as e:
+            print(f"[NOVA][SEARCH-HTML] Exception : {e}", flush=True)
+
+    if not results:
+        print(f"[NOVA][SEARCH] Aucun résultat pour '{query[:60]}'", flush=True)
         return []
+
+    # --- Extraction du contenu des 2 premières pages ---
+    for res in results[:2]:
+        try:
+            rr = requests.get(
+                res["url"],
+                headers={"User-Agent": "Mozilla/5.0 (compatible; NOVA/1.0)"},
+                timeout=8,
+                allow_redirects=True
+            )
+            if rr.status_code == 200:
+                if BS4_OK:
+                    s = BeautifulSoup(rr.text, "html.parser")
+                    for tag in s(["script", "style", "nav", "footer", "header", "aside", "noscript", "iframe"]):
+                        tag.decompose()
+                    text = " ".join(s.get_text(separator=" ").split())
+                else:
+                    text = " ".join(re.sub(r"<[^>]+>", " ", rr.text).split())
+                res["content"] = text[:2500]
+            else:
+                res["content"] = res.get("snippet", "")
+        except Exception:
+            res["content"] = res.get("snippet", "")
+
+    return results
 
 
 # ============================================================
@@ -418,7 +435,7 @@ def _describe_image(data_url, max_words=250):
 
 
 # ============================================================
-# ROUTE CHAT (avec recherche web optionnelle)
+# ROUTE CHAT
 # ============================================================
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -445,6 +462,7 @@ def chat():
 
     # === Recherche web si demandée ===
     search_context = ""
+    search_failed = False
     last_user_text = ""
     for m in reversed(messages):
         if m.get("role") == "user":
@@ -452,18 +470,26 @@ def chat():
             break
 
     if use_web_search and last_user_text.strip():
-        results = web_search(last_user_text, max_results=3)
+        results = web_search(last_user_text, max_results=4)
         if results:
             parts = []
             for i, r in enumerate(results, 1):
-                parts.append(f"[Source {i}] {r['title']}\nURL : {r['url']}\n{r.get('content') or r.get('snippet','')}")
+                content = r.get('content') or r.get('snippet', '')
+                parts.append(
+                    f"=== RÉSULTAT {i} ===\n"
+                    f"Titre : {r['title']}\n"
+                    f"URL : {r['url']}\n"
+                    f"Contenu : {content}"
+                )
             search_context = (
-                "Voici des informations récentes trouvées sur Internet "
-                f"(nous sommes le {date_str}). Base ta réponse sur ces informations "
-                "quand c'est pertinent, et cite tes sources en mentionnant l'URL :\n\n"
-                + "\n\n---\n\n".join(parts)
+                "INFORMATIONS TROUVÉES SUR INTERNET (utilise-les OBLIGATOIREMENT) :\n\n"
+                + "\n\n".join(parts)
+                + "\n\n=== FIN DES INFORMATIONS WEB ===\n"
             )
-            print(f"[NOVA][CHAT] Recherche web activée : {len(results)} sources", flush=True)
+            print(f"[NOVA][CHAT] Recherche web OK : {len(results)} sources", flush=True)
+        else:
+            search_failed = True
+            print(f"[NOVA][CHAT] Recherche web : aucun résultat", flush=True)
 
     system_prompt = (
         f"Tu t'appelles {ai_name}. {personality} "
@@ -471,16 +497,29 @@ def chat():
         f"{cfg['suffix']} Nous sommes le {date_str}."
     )
 
+    if use_web_search:
+        if search_context:
+            system_prompt += (
+                "\n\n⚠️ IMPORTANT : L'utilisateur a activé la recherche web. "
+                "Tu as reçu ci-dessous des informations à jour trouvées sur Internet. "
+                "Tu DOIS baser ta réponse sur ces informations, même si elles "
+                "contredisent tes connaissances. Cite les sources (URL) dans ta réponse. "
+                "Ne dis JAMAIS 'je ne trouve pas' si les informations sont dans le contexte. "
+                "Si les infos manquent vraiment, dis-le explicitement."
+            )
+        elif search_failed:
+            system_prompt += (
+                "\n\n⚠️ La recherche web n'a retourné AUCUN résultat. "
+                "Dis-le clairement à l'utilisateur : « La recherche web n'a rien donné pour cette question. » "
+                "Puis propose de reformuler ou de répondre à partir de tes connaissances."
+            )
+
     has_image = any(a.get("type") == "image" for a in attachments)
-    if has_image and ACTIVE_TEXT_MODEL != "meta/llama-3.2-11b-vision-instruct":
-        model = "meta/llama-3.2-11b-vision-instruct"
-    else:
-        model = ACTIVE_TEXT_MODEL
+    model = "meta/llama-3.2-11b-vision-instruct" if has_image else ACTIVE_TEXT_MODEL
 
     trimmed = messages[-20:] if len(messages) > 20 else messages[:]
     final_messages = [{"role": "system", "content": system_prompt}]
 
-    # Injecte le contexte web comme message système additionnel
     if search_context:
         final_messages.append({"role": "system", "content": search_context})
 
@@ -555,7 +594,7 @@ def chat():
 
 
 # ============================================================
-# ROUTE RECHERCHE WEB DIRECTE (pour test)
+# ROUTE RECHERCHE WEB DIRECTE (debug)
 # ============================================================
 @app.route("/api/search", methods=["POST"])
 def search_endpoint():
@@ -564,7 +603,7 @@ def search_endpoint():
     if not q:
         return {"error": "Requête vide."}, 400
     results = web_search(q, max_results=5)
-    return {"query": q, "results": results}
+    return {"query": q, "count": len(results), "results": results}
 
 
 # ============================================================
@@ -755,6 +794,21 @@ def image_status(job_id):
 # ============================================================
 # DEBUG + FICHIERS STATIQUES
 # ============================================================
+@app.route("/debug/search")
+def debug_search():
+    """Test la recherche web. Usage : /debug/search?q=..."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return {"error": "Paramètre ?q= manquant"}, 400
+    results = web_search(q, max_results=5)
+    return {
+        "query": q,
+        "count": len(results),
+        "bs4_ok": BS4_OK,
+        "results": results,
+    }
+
+
 @app.route("/debug")
 def debug():
     return {
@@ -783,4 +837,5 @@ if __name__ == "__main__":
     print(f"[NOVA] Cle API : {len(NVIDIA_API_KEY)} chars", flush=True)
     print(f"[NOVA] Modèles texte : {len(TEXT_MODELS)}", flush=True)
     print(f"[NOVA] Modèles image : {len(IMAGE_MODELS)}", flush=True)
+    print(f"[NOVA] bs4 : {BS4_OK}", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)
