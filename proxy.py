@@ -43,23 +43,45 @@ READ_TIMEOUT = 120
 IMAGE_JOBS = {}
 
 # ============================================================
-# HELPERS — DESCRIPTION D'IMAGE (VISION)
+# HELPERS — DESCRIPTION ULTRA-DÉTAILLÉE D'IMAGE (VISION)
 # ============================================================
-def _describe_image(data_url, max_words=70):
+def _describe_image(data_url, max_words=400):
     """
-    Envoie l'image au modele vision et retourne une description textuelle.
-    data_url : "data:image/png;base64,..."
-    Retourne "" si echec.
+    Envoie l'image au modele vision et retourne une description ULTRA detaillee
+    (comme si le modele texte 'voyait' vraiment l'image).
     """
     if not NVIDIA_API_KEY or not data_url:
         return ""
     try:
         prompt = (
-            "Tu es un assistant qui décrit précisément les images. "
-            f"Décris cette image en français en {max_words} mots maximum. "
-            "Concentre-toi sur : le sujet principal, les couleurs dominantes, "
-            "le style (photo, dessin, 3D...), l'ambiance et la composition. "
-            "Réponds uniquement par la description, sans introduction."
+            "Tu es un système de vision par ordinateur ultra-précis. "
+            "Analyse cette image en profondeur et décris-la de manière EXTRÊMEMENT détaillée "
+            "en français, comme si tu devais la faire 'voir' à une personne aveugle ou "
+            "à une IA de génération d'image qui doit la reproduire fidèlement.\n\n"
+            "Structure ta description dans cet ordre :\n\n"
+            "1. **SUJET PRINCIPAL** : Que voit-on au premier plan ? "
+            "Décris précisément chaque être humain (âge approximatif, sexe, expression du visage, "
+            "posture, vêtements et couleurs), animal, ou objet. Position exacte dans le cadre "
+            "(centre, à gauche, en haut...).\n\n"
+            "2. **ARRIÈRE-PLAN** : Que voit-on derrière ? Paysage, intérieur, mur, ciel, foule... "
+            "Décris chaque élément visible et sa position.\n\n"
+            "3. **COULEURS** : Liste les couleurs dominantes avec leurs teintes précises "
+            "(ex: bleu ciel pastel, rouge carmin vif, vert émeraude sombre...). "
+            "Indique les dégradés, les contrastes, les zones monochromes.\n\n"
+            "4. **LUMIÈRE ET OMBRES** : D'où vient la lumière ? Douce, dure, naturelle, artificielle ? "
+            "Ombres portées, reflets, contre-jour, néons, coucher de soleil ?\n\n"
+            "5. **STYLE ARTISTIQUE** : Photo réaliste, dessin animé, peinture à l'huile, "
+            "aquarelle, 3D, pixel art, manga, cinématographique, vintage, minimaliste ? "
+            "Précise la technique et l'ambiance visuelle.\n\n"
+            "6. **COMPOSITION** : Cadrage (gros plan, plan large, portrait, paysage), "
+            "angle de vue (frontal, plongée, contre-plongée), règle des tiers, symétrie.\n\n"
+            "7. **TEXTURES ET DÉTAILS FINS** : Matières (tissu, métal, bois, peau, verre...), "
+            "petits détails visibles (objets au sol, motifs, écritures, logos, bijoux...).\n\n"
+            "8. **AMBIANCE ET ÉMOTION** : Quelle émotion se dégage ? Joyeux, triste, "
+            "mystérieux, dramatique, apaisant, énergique ?\n\n"
+            "9. **TEXTE DANS L'IMAGE** : S'il y a du texte visible, transcris-le mot pour mot.\n\n"
+            f"Sois exhaustif et précis. Maximum {max_words} mots. "
+            "Réponds UNIQUEMENT par la description structurée, sans introduction ni conclusion."
         )
         payload = {
             "model": MODEL_VISION,
@@ -70,9 +92,9 @@ def _describe_image(data_url, max_words=70):
                     {"type": "image_url", "image_url": {"url": data_url}},
                 ]
             }],
-            "temperature": 0.3,
-            "top_p": 0.95,
-            "max_tokens": 200,
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "max_tokens": 800,
             "stream": False,
         }
         headers = {
@@ -81,13 +103,15 @@ def _describe_image(data_url, max_words=70):
             "Content-Type": "application/json",
         }
         r = requests.post(NVIDIA_CHAT_URL, json=payload, headers=headers,
-                          timeout=(10, 60))
+                          timeout=(15, 90))
         if r.status_code != 200:
-            print(f"[NOVA][VISION ERR] {r.status_code} -> {r.text[:200]}", flush=True)
+            print(f"[NOVA][VISION ERR] {r.status_code} -> {r.text[:300]}", flush=True)
             return ""
         data = r.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        return (content or "").strip()
+        description = (content or "").strip()
+        print(f"[NOVA][VISION OK] len={len(description)} chars", flush=True)
+        return description
     except Exception as e:
         print(f"[NOVA][VISION EXCEPTION] {e}", flush=True)
         return ""
@@ -176,7 +200,7 @@ def upload():
         b64 = base64.b64encode(file_bytes).decode("ascii")
         data_url = f"data:{mime};base64,{b64}"
 
-        # 🔑 CONVERSION AUTOMATIQUE EN TEXTE (invisible pour l'utilisateur)
+        # 🔑 CONVERSION AUTOMATIQUE EN TEXTE ULTRA-DÉTAILLÉ (invisible pour l'utilisateur)
         description = _describe_image(data_url)
         print(f"[NOVA][UPLOAD IMAGE] {filename} | desc = {description[:100]}...", flush=True)
 
@@ -186,7 +210,7 @@ def upload():
             "size": size,
             "mime": mime,
             "data_url": data_url,
-            "description": description,   # <- description cachée
+            "description": description,
         }
 
     return {"error": f"Type de fichier non supporté : {ext or '?'}"}, 400
@@ -247,14 +271,14 @@ def chat():
                         )
                     })
                 elif att.get("type") == "image":
-                    # Texte "caché" : description générée à l'upload
+                    # Description cachée ultra-détaillée
                     desc = att.get("description") or att.get("_description")
                     if desc:
                         content_parts.append({
                             "type": "text",
                             "text": (
-                                f"\n\n[Description automatique de l'image "
-                                f"« {att.get('filename','image')} » : {desc}]\n"
+                                f"\n\n[Analyse automatique détaillée de l'image "
+                                f"« {att.get('filename','image')} » :\n{desc}\n]\n"
                             )
                         })
                     # L'image elle-même pour la vision
@@ -399,16 +423,16 @@ def image_start():
         return {"error": "Cle API manquante."}, 500
     data = request.get_json() or {}
     prompt = (data.get("prompt") or "").strip()
-    # 🔑 Description d'image eventuelle (generee a l'upload)
     reference_description = (data.get("reference_description") or "").strip()
 
-    # 🔑 On combine : prompt utilisateur + description cachee de l'image
+    # Combine prompt utilisateur + description ultra-détaillée de l'image
     if reference_description:
         combined = (
             f"{prompt}\n\n"
-            f"[Style et contenu inspirés de l'image de référence : {reference_description}]"
+            f"[Style, couleurs et contenu inspirés de cette description d'image : "
+            f"{reference_description}]"
             if prompt else
-            f"Crée une image inspirée de cette description : {reference_description}"
+            f"Crée une image basée sur cette description ultra-détaillée : {reference_description}"
         )
     else:
         combined = prompt
