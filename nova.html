@@ -1511,8 +1511,8 @@ async function sendImageMsg(text){
   let labelIdx = 0;
 
   const progressInterval = setInterval(() => {
-    const inc = Math.max(0.6, (95 - progress) * 0.028);
-    progress = Math.min(progress + inc, 95);
+    const inc = Math.max(0.4, (92 - progress) * 0.025);
+    progress = Math.min(progress + inc, 92);
     fill.style.width = progress + '%';
     pctEl.textContent = Math.round(progress) + '%';
     const newIdx = Math.min(Math.floor(progress / 20), labels.length - 1);
@@ -1520,27 +1520,63 @@ async function sendImageMsg(text){
       labelIdx = newIdx;
       labelEl.textContent = labels[labelIdx];
     }
-  }, 150);
+  }, 200);
 
   const startId = currentConvId;
   abortCtrl = new AbortController();
+  let pollTimer = null;
 
   try {
-    const res = await fetchWithRetry(IMAGE_API_URL, {
+    // 1) Lancer le job
+    const startRes = await fetchWithRetry(IMAGE_API_URL + '/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ prompt: text }),
       signal: abortCtrl.signal
     });
 
-    if (!res.ok) {
-      let msg = 'Erreur ' + res.status;
-      try { const j = await res.json(); if (j.error) msg = j.error; } catch(e){}
+    if (!startRes.ok) {
+      let msg = 'Erreur ' + startRes.status;
+      try { const j = await startRes.json(); if (j.error) msg = j.error; } catch(e){}
       throw new Error(msg);
     }
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (!data.image) throw new Error('Aucune image reçue.');
+    const { job_id } = await startRes.json();
+    if (!job_id) throw new Error('Job ID non reçu.');
+
+    // 2) Poller toutes les 2s
+    const finalImage = await new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 90; // 3 minutes max
+
+      pollTimer = setInterval(async () => {
+        attempts++;
+        if (currentConvId !== startId) { clearInterval(pollTimer); reject(new Error('cancelled')); return; }
+        if (attempts > maxAttempts) { clearInterval(pollTimer); reject(new Error('Délai dépassé (3 min).')); return; }
+
+        try {
+          const stRes = await fetch(IMAGE_API_URL + '/status/' + job_id, { signal: abortCtrl.signal });
+          if (!stRes.ok) return;
+          const st = await stRes.json();
+
+          const realProgress = Math.max(progress, st.progress || 0);
+          if (realProgress > progress) {
+            progress = realProgress;
+            fill.style.width = progress + '%';
+            pctEl.textContent = Math.round(progress) + '%';
+          }
+
+          if (st.status === 'done' && st.image) {
+            clearInterval(pollTimer);
+            resolve(st.image);
+          } else if (st.status === 'error') {
+            clearInterval(pollTimer);
+            reject(new Error(st.error || 'Erreur de génération'));
+          }
+        } catch(e) {
+          if (e.name === 'AbortError') { clearInterval(pollTimer); reject(e); }
+        }
+      }, 2000);
+    });
 
     clearInterval(progressInterval);
     progress = 100;
@@ -1549,14 +1585,13 @@ async function sendImageMsg(text){
     labelEl.textContent = 'Terminé !';
 
     if (currentConvId !== startId) return;
-
     await new Promise(r => setTimeout(r, 450));
 
-    body.innerHTML = `<div class="img-result"><img src="${data.image}" alt="Image générée"></div>`;
+    body.innerHTML = `<div class="img-result"><img src="${finalImage}" alt="Image générée"></div>`;
     conv.messages.push({
       role: 'assistant',
       content: '[Image générée]',
-      image: data.image,
+      image: finalImage,
       isImage: true
     });
     saveConvs();
@@ -1564,7 +1599,8 @@ async function sendImageMsg(text){
 
   } catch(err) {
     clearInterval(progressInterval);
-    if (err.name === 'AbortError') return;
+    if (pollTimer) clearInterval(pollTimer);
+    if (err.name === 'AbortError' || err.message === 'cancelled') return;
     if (currentConvId === startId) {
       let msg = err.message;
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
@@ -1573,6 +1609,7 @@ async function sendImageMsg(text){
       body.innerHTML = `<div class="img-error">⚠️ <strong>Erreur :</strong> ${escapeHtml(msg)}</div>`;
     }
   } finally {
+    if (pollTimer) clearInterval(pollTimer);
     if (currentConvId === startId) {
       isLoading = false;
       sendBtn.disabled = inputEl.value.trim() === '';
@@ -1587,7 +1624,6 @@ async function sendMsg(text){
   text = text.trim();
   if(!text || isLoading || !currentUser) return;
 
-  // Redirection vers la génération d'image
   if (currentGenMode === 'image') {
     return sendImageMsg(text);
   }
