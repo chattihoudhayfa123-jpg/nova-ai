@@ -205,7 +205,7 @@ body.dark .landing-nav{background:rgba(26,21,18,.85);}
 .chat{flex:1;overflow-y:auto;scroll-behavior:smooth;}
 .chat::-webkit-scrollbar{width:8px;}
 .chat::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px;}
-.chat-inner{max-width:760px;margin:0 auto;padding:32px 24px 220px;}
+.chat-inner{max-width:760px;margin:0 auto;padding:32px 24px 240px;}
 
 .msg{display:flex;gap:16px;padding:16px 0;animation:msgIn .35s cubic-bezier(.2,.9,.25,1) both;}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -484,6 +484,7 @@ body.dark .err{color:#fca5a5;}
   border-radius: 10px;
   margin-bottom: 10px;
   width: fit-content;
+  flex-wrap: wrap;
 }
 .gen-mode-btn {
   padding: 7px 14px;
@@ -513,12 +514,62 @@ body.dark .err{color:#fca5a5;}
 }
 .gen-mode-btn.active svg { stroke: var(--accent); }
 
+/* Bouton recherche web */
+.websearch-btn {
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .2s;
+}
+.websearch-btn:hover {
+  color: var(--text);
+}
+.websearch-btn.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+.websearch-btn svg {
+  width: 14px; height: 14px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.websearch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 100px;
+  font-size: 11.5px;
+  color: var(--accent);
+  font-weight: 500;
+  margin-top: 8px;
+  animation: chipIn .25s ease both;
+}
+.websearch-badge svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+}
+
 /* Bouton model selector */
 .model-selector-btn {
   padding: 7px 12px;
   border-radius: 7px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: none;
+  background: transparent;
   color: var(--text-2);
   font-family: inherit;
   font-size: 12.5px;
@@ -533,9 +584,10 @@ body.dark .err{color:#fca5a5;}
   overflow: hidden;
 }
 .model-selector-btn:hover {
-  border-color: var(--accent);
   color: var(--accent);
-  background: var(--accent-soft);
+}
+.model-selector-btn.open {
+  color: var(--accent);
 }
 .model-selector-btn svg {
   width: 13px; height: 13px;
@@ -559,9 +611,9 @@ body.dark .err{color:#fca5a5;}
   position: absolute;
   bottom: calc(100% + 8px);
   right: 0;
-  width: 440px;
+  width: 460px;
   max-width: calc(100vw - 40px);
-  max-height: 520px;
+  max-height: 560px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -593,7 +645,6 @@ body.dark .err{color:#fca5a5;}
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  letter-spacing: -.1px;
 }
 .model-panel-head .close {
   background: transparent;
@@ -615,6 +666,17 @@ body.dark .err{color:#fca5a5;}
 }
 .model-list::-webkit-scrollbar { width: 6px; }
 .model-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+.model-cat-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-3);
+  padding: 12px 8px 6px;
+  margin-top: 4px;
+}
+.model-cat-title:first-child { margin-top: 0; }
 
 .model-item {
   border: 1px solid var(--border);
@@ -700,40 +762,11 @@ body.dark .err{color:#fca5a5;}
   align-items: center;
   gap: 6px;
 }
-.model-provider .badge {
-  padding: 1px 6px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-2);
-}
 .model-desc {
   font-size: 12px;
   color: var(--text-2);
   line-height: 1.5;
-  margin-bottom: 6px;
 }
-.model-metrics {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--text-3);
-}
-.model-metrics .metric {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.model-metrics .metric svg {
-  width: 11px; height: 11px;
-  stroke: var(--text-3); fill: none;
-  stroke-width: 2; stroke-linecap: round;
-}
-.model-metrics .metric b { color: var(--text-2); font-weight: 500; }
-
 .model-details {
   margin-top: 10px;
   padding-top: 10px;
@@ -1072,7 +1105,7 @@ body.dark .img-error { color: #fca5a5; }
   .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:80;box-shadow:var(--shadow-xl);}
   .sidebar:not(.collapsed){margin-left:0;}
   .sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w));}
-  .chat-inner{padding:20px 16px 220px;}
+  .chat-inner{padding:20px 16px 240px;}
   .composer{padding:10px 16px 16px;}
   .topbar{padding:0 14px;}
   .ai-status{display:none;}
@@ -1088,8 +1121,11 @@ body.dark .img-error { color: #fca5a5; }
   .img-result, .img-loading{max-width:100%;}
   .attach-chip{max-width:220px;}
   .model-panel{width: calc(100vw - 24px); right: -12px; max-height: 400px; }
-  .model-selector-btn { max-width: 140px; }
-  .model-selector-btn .mname { max-width: 100px; }
+  .model-selector-btn { max-width: 120px; }
+  .model-selector-btn .mname { max-width: 80px; font-size: 11.5px; }
+  .websearch-btn span { display: none; }
+  .websearch-btn { padding: 7px 10px; }
+  .gen-mode-btn { padding: 7px 10px; font-size: 12px; }
 }
 @media(min-width:769px){.backdrop{display:none!important;}}
 
@@ -1098,6 +1134,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 </head>
 <body>
 
+<!-- ============ LANDING ============ -->
 <div class="landing" id="landing">
   <nav class="landing-nav">
     <div class="landing-brand">
@@ -1160,9 +1197,9 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
         <p>Les messages s'affichent mot par mot en temps réel.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
-        <h3>Personnalisation totale</h3>
-        <p>Changez le nom de l'IA, sa personnalité, l'apparence.</p>
+        <div class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+        <h3>Recherche web</h3>
+        <p>Activez la recherche en ligne pour des infos à jour.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
@@ -1176,8 +1213,8 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
-        <h3>6 modèles d'IA</h3>
-        <p>Changez de modèle selon vos besoins en un clic.</p>
+        <h3>Choix du modèle</h3>
+        <p>Rapide, équilibré, puissant — changez en un clic.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
@@ -1205,6 +1242,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </footer>
 </div>
 
+<!-- ============ APP ============ -->
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar">
     <div class="sb-top">
@@ -1275,10 +1313,14 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
             Image
           </button>
 
-          <!-- Sélecteur de modèle -->
+          <button class="websearch-btn" id="webSearchBtn" type="button" title="Activer la recherche web">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <span>Web</span>
+          </button>
+
           <button class="model-selector-btn" id="modelBtn" type="button" title="Changer de modèle">
             <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-            <span class="mname" id="currentModelName">Nemotron 3.5 Lightning</span>
+            <span class="mname" id="currentModelName">Chargement…</span>
             <svg class="chev" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
         </div>
@@ -1324,6 +1366,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </button>
 </div>
 
+<!-- TERMS -->
 <div class="overlay" id="termsOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -1362,6 +1405,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </div>
 </div>
 
+<!-- LOGIN -->
 <div class="overlay" id="loginOverlay">
   <div class="login-card">
     <div class="login-logo">
@@ -1387,6 +1431,7 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </div>
 </div>
 
+<!-- SETTINGS -->
 <div class="overlay" id="settingsOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -1454,6 +1499,7 @@ let currentConvId = null;
 let isLoading = false;
 let authTab = 'login';
 let abortCtrl = null;
+let webSearchEnabled = false;
 
 /* ============ CATALOGUE DES MODÈLES ============ */
 let allTextModels = [];
@@ -1489,18 +1535,18 @@ function updateModelButtonLabel() {
   const info = getActiveModelInfo();
   if (info) {
     $('currentModelName').textContent = info.name;
+  } else {
+    $('currentModelName').textContent = 'Aucun';
   }
 }
 
 function openModelPanel() {
-  const panel = $('modelPanel');
-  const btn = $('modelBtn');
   $('modelPanelTitle').textContent = currentGenMode === 'image'
     ? 'Modèles de génération d\'image'
     : 'Modèles de conversation';
   renderModelList();
-  panel.classList.add('open');
-  btn.classList.add('open');
+  $('modelPanel').classList.add('open');
+  $('modelBtn').classList.add('open');
 }
 
 function closeModelPanel() {
@@ -1514,48 +1560,56 @@ function renderModelList() {
   const container = $('modelList');
   container.innerHTML = '';
 
+  if (!list.length) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">Aucun modèle disponible.</div>';
+    return;
+  }
+
+  // Groupe par catégorie
+  const categories = {};
   list.forEach(m => {
-    const item = document.createElement('div');
-    item.className = 'model-item' + (m.id === activeId ? ' active' : '');
-    item.dataset.modelId = m.id;
+    const cat = m.category || 'Autres';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(m);
+  });
 
-    const metrics = [];
-    if (m.queue) metrics.push(`<span class="metric"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>File : <b>${escapeHtml(m.queue)}</b></span>`);
-    if (m.speed) metrics.push(`<span class="metric"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><b>${escapeHtml(m.speed)}</b></span>`);
-    if (m.efficiency) metrics.push(`<span class="metric"><svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7-6.5-4-6.5 4 2-7-5.5-4h7z"/></svg><b>${escapeHtml(m.efficiency)}</b></span>`);
+  Object.keys(categories).forEach(catName => {
+    const catTitle = document.createElement('div');
+    catTitle.className = 'model-cat-title';
+    catTitle.textContent = catName;
+    container.appendChild(catTitle);
 
-    item.innerHTML = `
-      <div class="model-item-head">
-        <div class="radio"></div>
-        <div class="mtitle">${escapeHtml(m.name)}</div>
-        <button class="plus-btn" type="button" title="Voir les caractéristiques">
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
-      </div>
-      <div class="model-provider">
-        ${escapeHtml(m.provider || '')}
-        ${m.default ? '<span class="badge">Par défaut</span>' : ''}
-      </div>
-      <div class="model-desc">${escapeHtml(m.description || '')}</div>
-      <div class="model-metrics">${metrics.join('')}</div>
-      <div class="model-details">
-        <dl class="kv">
-          ${m.context ? `<dt>Contexte</dt><dd>${escapeHtml(m.context)}</dd>` : ''}
-          ${m.steps ? `<dt>Étapes</dt><dd>${m.steps}</dd>` : ''}
-          ${m.best_for ? `<dt>Idéal pour</dt><dd>${escapeHtml(m.best_for)}</dd>` : ''}
-        </dl>
-      </div>`;
+    categories[catName].forEach(m => {
+      const item = document.createElement('div');
+      item.className = 'model-item' + (m.id === activeId ? ' active' : '');
+      item.dataset.modelId = m.id;
 
-    // Clic sur le "plus" → toggle détails
-    item.querySelector('.plus-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      item.classList.toggle('expanded');
+      item.innerHTML = `
+        <div class="model-item-head">
+          <div class="radio"></div>
+          <div class="mtitle">${escapeHtml(m.name)}</div>
+          <button class="plus-btn" type="button" title="Voir les caractéristiques">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+        <div class="model-provider">${escapeHtml(m.provider || '')}</div>
+        <div class="model-desc">${escapeHtml(m.description || '')}</div>
+        <div class="model-details">
+          <dl class="kv">
+            ${m.best_for ? `<dt>Idéal pour</dt><dd>${escapeHtml(m.best_for)}</dd>` : ''}
+            <dt>Fournisseur</dt><dd>${escapeHtml(m.provider || 'NVIDIA')}</dd>
+          </dl>
+        </div>`;
+
+      item.querySelector('.plus-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        item.classList.toggle('expanded');
+      });
+
+      item.addEventListener('click', () => selectModel(m.id));
+
+      container.appendChild(item);
     });
-
-    // Clic sur l'item → sélectionner
-    item.addEventListener('click', () => selectModel(m.id));
-
-    container.appendChild(item);
   });
 }
 
@@ -1576,7 +1630,6 @@ async function selectModel(modelId) {
       }
       renderModelList();
       updateModelButtonLabel();
-      // Ferme le panel après un petit délai
       setTimeout(closeModelPanel, 250);
     }
   } catch(e) {
@@ -1584,7 +1637,6 @@ async function selectModel(modelId) {
   }
 }
 
-// Bouton toggle du panel
 $('modelBtn').addEventListener('click', (e) => {
   e.stopPropagation();
   if ($('modelPanel').classList.contains('open')) {
@@ -1596,11 +1648,19 @@ $('modelBtn').addEventListener('click', (e) => {
 
 $('modelPanelClose').addEventListener('click', closeModelPanel);
 
-// Fermer le panel en cliquant ailleurs
 document.addEventListener('click', (e) => {
   if (!$('modelPanel').contains(e.target) && !$('modelBtn').contains(e.target)) {
     closeModelPanel();
   }
+});
+
+/* ============ RECHERCHE WEB ============ */
+$('webSearchBtn').addEventListener('click', () => {
+  webSearchEnabled = !webSearchEnabled;
+  $('webSearchBtn').classList.toggle('active', webSearchEnabled);
+  $('webSearchBtn').title = webSearchEnabled
+    ? 'Recherche web activée — cliquez pour désactiver'
+    : 'Activer la recherche web';
 });
 
 /* ============================================================
@@ -2105,6 +2165,12 @@ function renderCurrent(){
       body.innerHTML = renderMD(m.content);
       enhanceCodeBlocks(body);
     }
+    if (m.webSearch) {
+      const badge = document.createElement('div');
+      badge.className = 'websearch-badge';
+      badge.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> Recherche web activée`;
+      body.appendChild(badge);
+    }
     if (m.attachments && m.attachments.length) {
       renderAttachmentsInMsg(body, m.attachments);
     }
@@ -2129,9 +2195,9 @@ function renderWelcome(){
         <span class="sugg-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
         <div><div class="sugg-text">Explique-moi l'IA</div><div class="sugg-sub">Les bases en termes simples</div></div>
       </button>
-      <button class="sugg" data-p="Écris-moi un email professionnel pour demander un rendez-vous">
-        <span class="sugg-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg></span>
-        <div><div class="sugg-text">Rédiger un email</div><div class="sugg-sub">Demande professionnelle</div></div>
+      <button class="sugg" data-p="Quelles sont les dernières actualités en intelligence artificielle ?">
+        <span class="sugg-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>
+        <div><div class="sugg-text">Actus IA</div><div class="sugg-sub">Active la recherche web</div></div>
       </button>
       <button class="sugg" data-p="Donne-moi 5 idées de projets innovants">
         <span class="sugg-icon"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>
@@ -2378,6 +2444,14 @@ async function sendMsg(text){
 
   const { wrap: uw, body: ub } = makeMsg('user');
   if (text) ub.textContent = text;
+
+  if (webSearchEnabled) {
+    const badge = document.createElement('div');
+    badge.className = 'websearch-badge';
+    badge.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> Recherche web activée`;
+    ub.appendChild(badge);
+  }
+
   if (attsAtSend.length) {
     renderAttachmentsInMsg(ub, attsAtSend.map(a => ({
       type: a.type, filename: a.filename, size: a.size,
@@ -2387,7 +2461,7 @@ async function sendMsg(text){
   chatInner.appendChild(uw);
   chatEl.scrollTop = chatEl.scrollHeight;
 
-  const userMsg = { role: 'user', content: text || '' };
+  const userMsg = { role: 'user', content: text || '', webSearch: webSearchEnabled };
   if (attsAtSend.length) {
     userMsg.attachments = attsAtSend.map(a => ({
       type: a.type, filename: a.filename, size: a.size,
@@ -2423,7 +2497,8 @@ async function sendMsg(text){
         body.innerHTML =
           '<div class="typing-dots"><span></span><span></span><span></span></div>' +
           '<p style="font-size:12px;color:var(--text-3);margin-top:8px;font-style:italic;">' +
-          '⏳ Réveil du serveur en cours… (hébergement gratuit, jusqu\'à 30s)</p>';
+          (webSearchEnabled ? '🌐 Recherche web en cours…' : '⏳ Réveil du serveur en cours…') +
+          '</p>';
       }
     }
   }, 3000);
@@ -2436,6 +2511,7 @@ async function sendMsg(text){
         mode: currentMode,
         messages: conv.messages.slice(-20),
         config: { aiName: settings.aiName, personality: settings.personality },
+        web_search: webSearchEnabled,
         attachments: attsAtSend.map(a => ({
           type: a.type,
           filename: a.filename,
@@ -2590,9 +2666,7 @@ document.querySelectorAll('.gen-mode-btn').forEach(b => {
     inputEl.placeholder = currentGenMode === 'image'
       ? "Décrivez l'image (ou joignez-en une pour vous en inspirer)…"
       : "Écrivez un message...";
-    // Met à jour le bouton modèle
     updateModelButtonLabel();
-    // Ferme le panel si ouvert
     closeModelPanel();
     inputEl.focus();
   });
