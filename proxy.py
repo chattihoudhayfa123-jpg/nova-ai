@@ -31,6 +31,9 @@ MODEL_VISION = os.environ.get("NVIDIA_MODEL_VISION", "meta/llama-3.2-11b-vision-
 # ====== IMAGE (génération FLUX.2-klein-4B) ======
 NVIDIA_IMAGE_URL = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.2-klein-4b"
 
+# Limite DURE de l'API FLUX.2 pour le prompt : 800 caractères
+FLUX_MAX_PROMPT_LEN = 780   # marge de sécurité
+
 MODES = {
     "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
     "moyen":  {"max_tokens": 4000, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
@@ -42,13 +45,33 @@ READ_TIMEOUT = 120
 
 IMAGE_JOBS = {}
 
+
+# ============================================================
+# HELPERS — TRONCATURE INTELLIGENTE
+# ============================================================
+def _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN):
+    """
+    Tronque intelligemment un prompt a max_len caracteres.
+    Cherche la derniere ponctuation/space propre pour ne pas couper en plein mot.
+    """
+    prompt = (prompt or "").strip()
+    if len(prompt) <= max_len:
+        return prompt
+    cut = prompt[:max_len]
+    # Cherche le meilleur point de coupure (apres une ponctuation ou un espace)
+    for sep in ['. ', '.\n', '! ', '? ', '; ', ', ', '\n', ' ']:
+        idx = cut.rfind(sep)
+        if idx > max_len * 0.5:  # au moins 50% du texte garde
+            return cut[:idx + len(sep)].rstrip() + '...'
+    return cut.rstrip() + '...'
+
+
 # ============================================================
 # HELPERS — DESCRIPTION ULTRA-DÉTAILLÉE D'IMAGE (VISION)
 # ============================================================
 def _describe_image(data_url, max_words=400):
     """
-    Envoie l'image au modele vision et retourne une description ULTRA detaillee
-    (comme si le modele texte 'voyait' vraiment l'image).
+    Envoie l'image au modele vision et retourne une description ULTRA detaillee.
     """
     if not NVIDIA_API_KEY or not data_url:
         return ""
@@ -381,6 +404,13 @@ def _save_image_result(job_id, r):
 
 def _run_image_job(job_id, prompt):
     try:
+        # 🔑 Tronque le prompt a la limite FLUX.2 (800 chars max)
+        original_len = len(prompt or "")
+        prompt = _truncate_prompt(prompt, max_len=FLUX_MAX_PROMPT_LEN)
+        if original_len > FLUX_MAX_PROMPT_LEN:
+            print(f"[NOVA][IMAGE] Prompt tronque : {original_len} -> {len(prompt)} chars", flush=True)
+        print(f"[NOVA][IMAGE] Prompt final ({len(prompt)} chars) : {prompt[:120]}...", flush=True)
+
         IMAGE_JOBS[job_id]["status"] = "generating"
         IMAGE_JOBS[job_id]["progress"] = 10
 
@@ -425,20 +455,32 @@ def image_start():
     prompt = (data.get("prompt") or "").strip()
     reference_description = (data.get("reference_description") or "").strip()
 
-    # Combine prompt utilisateur + description ultra-détaillée de l'image
-    if reference_description:
-        combined = (
-            f"{prompt}\n\n"
-            f"[Style, couleurs et contenu inspirés de cette description d'image : "
-            f"{reference_description}]"
-            if prompt else
-            f"Crée une image basée sur cette description ultra-détaillée : {reference_description}"
-        )
+    # 🔑 Combine prompt utilisateur + description (avec PRIORITÉ au prompt utilisateur)
+    # FLUX.2 accepte max 800 caracteres -> on tronque intelligemment
+    MAX = FLUX_MAX_PROMPT_LEN
+
+    if reference_description and prompt:
+        # Prompt utilisateur d'abord (prioritaire), puis extrait de la description
+        user_part = prompt.strip()
+        remaining = MAX - len(user_part) - 30  # -30 pour le separateur
+        if remaining > 100:
+            desc_part = reference_description[:remaining].rstrip()
+            combined = f"{user_part}\nContexte visuel : {desc_part}"
+        else:
+            combined = user_part  # pas assez de place, on garde que le prompt
+    elif reference_description:
+        # Pas de prompt utilisateur -> on prend le debut de la description
+        combined = reference_description[:MAX].rstrip()
     else:
-        combined = prompt
+        combined = prompt.strip()
+
+    # Securite finale : troncature intelligente
+    combined = _truncate_prompt(combined, max_len=MAX)
 
     if not combined.strip():
         return {"error": "Prompt vide."}, 400
+
+    print(f"[NOVA][IMAGE START] prompt final = {len(combined)} chars", flush=True)
 
     job_id = str(uuid.uuid4())
     IMAGE_JOBS[job_id] = {
@@ -476,6 +518,7 @@ def debug():
         "chat_model": MODEL_CHAT,
         "vision_model": MODEL_VISION,
         "image_url": NVIDIA_IMAGE_URL,
+        "flux_max_prompt_len": FLUX_MAX_PROMPT_LEN,
         "pypdf_ok": PYPDF_OK,
     }
 
@@ -493,5 +536,6 @@ if __name__ == "__main__":
     print(f"[NOVA] Chat   : {MODEL_CHAT}", flush=True)
     print(f"[NOVA] Vision : {MODEL_VISION}", flush=True)
     print(f"[NOVA] Image  : {NVIDIA_IMAGE_URL}", flush=True)
+    print(f"[NOVA] Limite prompt FLUX : {FLUX_MAX_PROMPT_LEN} chars", flush=True)
     print(f"[NOVA] pypdf  : {PYPDF_OK}", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)
