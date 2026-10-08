@@ -509,7 +509,6 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
 </head>
 <body>
 
-<!-- ============ LANDING ============ -->
 <div class="landing" id="landing">
   <nav class="landing-nav">
     <div class="landing-brand">
@@ -617,7 +616,6 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </footer>
 </div>
 
-<!-- ============ APP ============ -->
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar">
     <div class="sb-top">
@@ -702,7 +700,6 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </button>
 </div>
 
-<!-- TERMS -->
 <div class="overlay" id="termsOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -741,7 +738,6 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </div>
 </div>
 
-<!-- LOGIN -->
 <div class="overlay" id="loginOverlay">
   <div class="login-card">
     <div class="login-logo">
@@ -767,7 +763,6 @@ body.no-anim *{animation-duration:.01ms!important;transition-duration:.01ms!impo
   </div>
 </div>
 
-<!-- SETTINGS -->
 <div class="overlay" id="settingsOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -830,6 +825,30 @@ let currentConvId = null;
 let isLoading = false;
 let authTab = 'login';
 let abortCtrl = null;
+
+/* ============ FETCH AVEC RETRY (anti cold-start Render) ============ */
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  let lastErr;
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      const res = await fetch(url, options);
+      // Si erreur 502/503/504 = probable cold start → on retente
+      if (!res.ok && [502, 503, 504].includes(res.status) && i < maxRetries) {
+        throw new Error('HTTP ' + res.status);
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (err.name === 'AbortError') throw err;
+      if (i < maxRetries) {
+        // 2s, puis 5s, puis 10s
+        const delay = [2000, 5000, 10000][i] || 10000;
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
 
 const settings = {
   theme: 'light',
@@ -902,10 +921,7 @@ const saveConvs = () => localStorage.setItem(convKey(), JSON.stringify(conversat
 
 function simpleHash(str){
   let h = 0;
-  for(let i = 0; i < str.length; i++){
-    h = ((h << 5) - h) + str.charCodeAt(i);
-    h = h & 0x7FFFFFFF; // Garde un entier 32-bit positif
-  }
+  for(let i = 0; i < str.length; i++){ h = ((h<<5)-h) + str.charCodeAt(i); h = h & h; }
   return String(h);
 }
 
@@ -1048,64 +1064,30 @@ function escapeHtml(t){
   return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ============================================================
-   MARKDOWN + BLOC DE CODE AVEC BOUTON COPIER
-   Version corrigée : les blocs de code ne sont plus altérés
-   par la conversion des sauts de ligne.
-============================================================ */
 function renderMD(text){
-  if(!text) return '';
   let html = escapeHtml(text);
 
-  // 1. Extraire les blocs de code et les remplacer par un marqueur temporaire
-  const codeBlocks = [];
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, lang, code) => {
     const cleanLang = (lang || 'code').toLowerCase();
     const cleanCode = code.trim();
-    const marker = `\u0000CB${codeBlocks.length}\u0000`;
-    codeBlocks.push({ lang: cleanLang, code: cleanCode });
-    return marker;
+    return `<pre data-lang="${cleanLang}"><code>${cleanCode}</code></pre>`;
   });
 
-  // 2. Traitement Markdown sur le texte restant
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  // Regex pour l'italique compatible avec les anciens navigateurs
-  try {
-    html = html.replace(/\*(?!\s)(.+?)(?<!\s)\*/g, '<em>$1</em>');
-  } catch(e) {
-    html = html.replace(/\*([^\s*][^*]*?[^\s*])\*/g, '<em>$1</em>');
-  }
+  html = html.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*/g, '$1<em>$2</em>');
   html = html.replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]*?<\/li>)/g, m => m.includes('<ul>') ? m : '<ul>' + m + '</ul>');
   html = html.replace(/<\/ul>\s*<ul>/g, '');
   html = html.replace(/\n\n+/g, '</p><p>');
   html = html.replace(/\n/g, '<br>');
   if(!html.startsWith('<')) html = '<p>' + html + '</p>';
-
-  // 3. Restaurer les blocs de code
-  codeBlocks.forEach((block, i) => {
-    const marker = `\u0000CB${i}\u0000`;
-    const codeHtml = `<pre data-lang="${block.lang}"><code>${block.code}</code></pre>`;
-    html = html.replace(marker, codeHtml);
-  });
-
-  // 4. Nettoyer les balises <p> et <br> autour des blocs de code
-  html = html.replace(/<p>\s*(<pre[\s\S]*?<\/pre>)\s*<\/p>/g, '$1');
-  html = html.replace(/<br>\s*(<pre[\s\S]*?<\/pre>)/g, '$1');
-  html = html.replace(/(<\/pre>)\s*<br>/g, '$1');
-  html = html.replace(/<p><\/p>/g, '');
-  html = html.replace(/<p>\s*<\/p>/g, '');
-
   return html;
 }
 
-/* ============================================================
-   AJOUTER LES BOUTONS COPIER SUR LES BLOCS DE CODE
-============================================================ */
 function enhanceCodeBlocks(container){
   const pres = container.querySelectorAll('pre');
   pres.forEach(pre => {
@@ -1157,9 +1139,6 @@ function enhanceCodeBlocks(container){
   });
 }
 
-/* ============================================================
-   ANIMATION DE TEXTE PROGRESSIVE
-============================================================ */
 function appendWords(container, text){
   if(!settings.wordAnim){
     container.appendChild(document.createTextNode(text));
@@ -1215,7 +1194,7 @@ function renderCurrent(){
 function renderWelcome(){
   const w = document.createElement('div');
   w.className = 'welcome';
-  const name = currentUser ? (currentUser.charAt(0).toUpperCase() + currentUser.slice(1)) : 'Utilisateur';
+  const name = currentUser.charAt(0).toUpperCase() + currentUser.slice(1);
   w.innerHTML = `
     <div class="welcome-logo">
       <img class="icon" src="/logo.png" alt="NOVA">
@@ -1260,7 +1239,7 @@ function addTyping(){
 function removeTyping(){ const t = $('typing'); if(t) t.remove(); }
 function autoResize(){ inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 220) + 'px'; }
 
-/* ============ SEND MESSAGE ============ */
+/* ============ SEND MESSAGE (avec retry + message réveil serveur) ============ */
 async function sendMsg(text){
   text = text.trim();
   if(!text || isLoading || !currentUser) return;
@@ -1287,8 +1266,22 @@ async function sendMsg(text){
   const startId = currentConvId;
   abortCtrl = new AbortController();
 
+  // Message "réveil du serveur" si ça dépasse 3 secondes
+  const wakeTimeout = setTimeout(() => {
+    const typing = document.getElementById('typing');
+    if (typing) {
+      const body = typing.querySelector('.msg-body');
+      if (body) {
+        body.innerHTML =
+          '<div class="typing-dots"><span></span><span></span><span></span></div>' +
+          '<p style="font-size:12px;color:var(--text-3);margin-top:8px;font-style:italic;">' +
+          '⏳ Réveil du serveur en cours… (hébergement gratuit, jusqu\'à 30s)</p>';
+      }
+    }
+  }, 3000);
+
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetchWithRetry(API_URL, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -1298,6 +1291,8 @@ async function sendMsg(text){
       }),
       signal: abortCtrl.signal
     });
+
+    clearTimeout(wakeTimeout);
     if(!res.ok) throw new Error('Erreur serveur ' + res.status);
     if(currentConvId !== startId) return;
     removeTyping();
@@ -1359,15 +1354,30 @@ async function sendMsg(text){
       }
     }
   } catch(err){
+    clearTimeout(wakeTimeout);
     if(err.name === 'AbortError') return;
     removeTyping();
     if(currentConvId === startId){
       const { wrap, body } = makeMsg('assistant');
-      body.innerHTML = `<p><strong>Erreur :</strong> ${escapeHtml(err.message)}</p>`;
+
+      // Message clair selon le type d'erreur
+      let errMsg;
+      if(err.message.includes('Failed to fetch') || err.message.includes('NetworkError')){
+        errMsg = "Serveur en cours de démarrage (hébergement gratuit). Attendez ~30 secondes puis renvoyez votre message.";
+      } else if(err.message.includes('API 4')){
+        errMsg = "Clé API invalide ou quota dépassé. Vérifiez la variable NVIDIA_API_KEY sur Render.";
+      } else if(err.message.includes('API 5')){
+        errMsg = "Le service NVIDIA est momentanément indisponible. Réessayez dans quelques instants.";
+      } else {
+        errMsg = err.message;
+      }
+
+      body.innerHTML = `<p><strong>⚠️ ${escapeHtml(errMsg)}</strong></p>`;
       chatInner.appendChild(wrap);
       chatEl.scrollTop = chatEl.scrollHeight;
     }
   } finally {
+    clearTimeout(wakeTimeout);
     if(currentConvId === startId){
       isLoading = false;
       sendBtn.disabled = inputEl.value.trim() === '';
