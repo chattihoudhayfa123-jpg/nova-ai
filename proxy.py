@@ -9,13 +9,18 @@ CORS(app)
 
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "").strip()
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
+MODEL = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
 
+# Valeurs raisonnables pour un hebergement gratuit (Render free tier)
 MODES = {
     "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
     "moyen":  {"max_tokens": 4000, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
     "max":    {"max_tokens": 8000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
 }
+
+# Timeout : 15s connexion / 120s lecture (compatible free tier)
+CONNECT_TIMEOUT = int(os.environ.get("CONNECT_TIMEOUT", 15))
+READ_TIMEOUT = int(os.environ.get("READ_TIMEOUT", 120))
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -62,17 +67,22 @@ def chat():
     def generate():
         try:
             with requests.post(NVIDIA_URL, json=payload, headers=headers,
-                               stream=True, timeout=(15, 120)) as r:
+                               stream=True, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)) as r:
                 if r.status_code != 200:
-                    err = r.text[:200].replace('"', "'").replace("\n", " ")
+                    err_full = r.text[:500]
+                    # Log dans Render -> visible dans l'onglet Logs
+                    print(f"[NOVA][ERREUR NVIDIA] {r.status_code} -> {err_full}", flush=True)
+                    err = err_full[:200].replace('"', "'").replace("\n", " ")
                     yield f'data: {{"error": "API {r.status_code}: {err}"}}\n\n'.encode()
                     return
                 for line in r.iter_lines():
                     if line:
                         yield line + b"\n"
-        except requests.exceptions.Timeout:
-            yield b'data: {"error": "Delai depasse."}\n\n'
+        except requests.exceptions.ReadTimeout:
+            print("[NOVA][TIMEOUT] Lecture depassee", flush=True)
+            yield b'data: {"error": "Delai depasse cote serveur."}\n\n'
         except Exception as e:
+            print(f"[NOVA][EXCEPTION] {e}", flush=True)
             err = str(e)[:200].replace('"', "'").replace("\n", " ")
             yield f'data: {{"error": "{err}"}}\n\n'.encode()
 
@@ -92,7 +102,9 @@ def debug():
     return {
         "key_present": bool(NVIDIA_API_KEY),
         "key_length": len(NVIDIA_API_KEY),
-        "key_valid": NVIDIA_API_KEY.startswith("nvapi-") and len(NVIDIA_API_KEY) > 50
+        "key_valid": NVIDIA_API_KEY.startswith("nvapi-") and len(NVIDIA_API_KEY) > 50,
+        "model": MODEL,
+        "modes": {k: v["max_tokens"] for k, v in MODES.items()}
     }
 
 
@@ -109,4 +121,5 @@ def static_files(filename):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"[NOVA] Cle API : {len(NVIDIA_API_KEY)} chars", flush=True)
+    print(f"[NOVA] Model   : {MODEL}", flush=True)
     app.run(host="0.0.0.0", port=port, debug=False)
