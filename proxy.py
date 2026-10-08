@@ -12,9 +12,9 @@ NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
 MODES = {
-    "faible": {"max_tokens": 1000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
-    "moyen":  {"max_tokens": 2500, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
-    "max":    {"max_tokens": 4000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
+    "faible": {"max_tokens": 2000, "temperature": 0.3, "suffix": " Reponds de facon concise."},
+    "moyen":  {"max_tokens": 4000, "temperature": 0.7, "suffix": " Sois clair et equilibre."},
+    "max":    {"max_tokens": 8000, "temperature": 1.0, "suffix": " Analyse en profondeur."}
 }
 
 
@@ -25,7 +25,7 @@ def chat():
             yield b'data: {"error": "Cle API manquante."}\n\n'
         return Response(stream_with_context(err()), mimetype="text/event-stream")
 
-    data = request.get_json()
+    data = request.get_json() or {}
     messages = data.get("messages", [])
     mode = data.get("mode", "moyen")
     config = data.get("config", {})
@@ -61,7 +61,8 @@ def chat():
 
     def generate():
         try:
-            with requests.post(NVIDIA_URL, json=payload, headers=headers, stream=True, timeout=(15, 180)) as r:
+            with requests.post(NVIDIA_URL, json=payload, headers=headers,
+                               stream=True, timeout=(15, 120)) as r:
                 if r.status_code != 200:
                     err = r.text[:200].replace('"', "'").replace("\n", " ")
                     yield f'data: {{"error": "API {r.status_code}: {err}"}}\n\n'.encode()
@@ -69,6 +70,8 @@ def chat():
                 for line in r.iter_lines():
                     if line:
                         yield line + b"\n"
+        except requests.exceptions.Timeout:
+            yield b'data: {"error": "Delai depasse."}\n\n'
         except Exception as e:
             err = str(e)[:200].replace('"', "'").replace("\n", " ")
             yield f'data: {{"error": "{err}"}}\n\n'.encode()
