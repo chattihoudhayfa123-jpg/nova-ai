@@ -42,7 +42,7 @@ MODES = {
 }
 
 # ============================================================
-# CATALOGUE CURÉ — Modèles principaux uniquement
+# CATALOGUE CURÉ — Modèles texte
 # ============================================================
 CURATED_TEXT_MODELS = {
     "nvidia/nemotron-3.5-lightning-30b-a3b": {
@@ -103,6 +103,11 @@ CURATED_TEXT_MODELS = {
     },
 }
 
+# ============================================================
+# CATALOGUE CURÉ — Modèles image
+# ⚠️ Ces modèles sont sur ai.api.nvidia.com et n'apparaissent PAS
+# dans /v1/models → on les garde TOUS (pas de filtrage)
+# ============================================================
 CURATED_IMAGE_MODELS = {
     "black-forest-labs/flux.2-klein-4b": {
         "name": "FLUX.2 Klein 4B",
@@ -176,56 +181,63 @@ def _build_model_entry(mid, curated_info, kind):
 
 
 def fetch_nvidia_models():
-    global TEXT_MODELS, IMAGE_MODELS
-    if not NVIDIA_API_KEY:
-        return
-    try:
-        r = requests.get(
-            f"{NVIDIA_BASE}/models",
-            headers={"Authorization": f"Bearer {NVIDIA_API_KEY}", "Accept": "application/json"},
-            timeout=(10, 30)
-        )
-        if r.status_code != 200:
-            print(f"[NOVA] Erreur /v1/models : {r.status_code}", flush=True)
-            return
-        data = r.json()
-        models = data.get("data", []) if isinstance(data, dict) else []
-        available_ids = {m.get("id", "") for m in models}
-        print(f"[NOVA] {len(available_ids)} modèles disponibles chez NVIDIA.", flush=True)
+    global TEXT_MODELS, IMAGE_MODELS, ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
 
-        text_models = {}
+    # -------- 1) Modèles TEXTE : filtrés par /v1/models --------
+    text_models = {}
+    if NVIDIA_API_KEY:
+        try:
+            r = requests.get(
+                f"{NVIDIA_BASE}/models",
+                headers={"Authorization": f"Bearer {NVIDIA_API_KEY}", "Accept": "application/json"},
+                timeout=(10, 30)
+            )
+            if r.status_code == 200:
+                data = r.json()
+                models = data.get("data", []) if isinstance(data, dict) else []
+                available_ids = {m.get("id", "") for m in models}
+                print(f"[NOVA] {len(available_ids)} modèles disponibles chez NVIDIA.", flush=True)
+
+                for mid, info in CURATED_TEXT_MODELS.items():
+                    if mid in available_ids:
+                        text_models[mid] = _build_model_entry(mid, info, "chat")
+                    else:
+                        print(f"[NOVA] ⚠ Texte absent : {mid}", flush=True)
+
+                # Fallback : si aucun modèle curé n'est dispo, prend le 1er modèle chat
+                if not text_models:
+                    for m in models:
+                        mid = m.get("id", "")
+                        if _classify_model(mid) == "chat":
+                            text_models[mid] = _build_model_entry(mid, {"name": mid.split("/")[-1]}, "chat")
+                            break
+            else:
+                print(f"[NOVA] Erreur /v1/models : {r.status_code}", flush=True)
+        except Exception as e:
+            print(f"[NOVA] Exception /v1/models : {e}", flush=True)
+
+    # Fallback ultime : si aucun modèle texte, on garde les curés (utile pour tests)
+    if not text_models:
+        print(f"[NOVA] ⚠ Aucun modèle texte trouvé, utilisation du catalogue curé par défaut.", flush=True)
         for mid, info in CURATED_TEXT_MODELS.items():
-            if mid in available_ids:
-                text_models[mid] = _build_model_entry(mid, info, "chat")
-            else:
-                print(f"[NOVA] ⚠ Texte absent : {mid}", flush=True)
+            text_models[mid] = _build_model_entry(mid, info, "chat")
 
-        image_models = {}
-        for mid, info in CURATED_IMAGE_MODELS.items():
-            if mid in available_ids:
-                image_models[mid] = _build_model_entry(mid, info, "image")
-            else:
-                print(f"[NOVA] ⚠ Image absente : {mid}", flush=True)
+    TEXT_MODELS = text_models
 
-        if not text_models:
-            for m in models:
-                mid = m.get("id", "")
-                if _classify_model(mid) == "chat":
-                    text_models[mid] = _build_model_entry(mid, {"name": mid.split("/")[-1]}, "chat")
-                    break
+    # -------- 2) Modèles IMAGE : PAS de filtrage (endpoint différent) --------
+    image_models = {}
+    for mid, info in CURATED_IMAGE_MODELS.items():
+        image_models[mid] = _build_model_entry(mid, info, "image")
+    IMAGE_MODELS = image_models
+    print(f"[NOVA] {len(IMAGE_MODELS)} modèles image (non filtrés).", flush=True)
 
-        TEXT_MODELS = text_models
-        IMAGE_MODELS = image_models
+    # -------- 3) Modèle actif --------
+    if ACTIVE_TEXT_MODEL not in TEXT_MODELS and TEXT_MODELS:
+        ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
+    if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS and IMAGE_MODELS:
+        ACTIVE_IMAGE_MODEL = next(iter(IMAGE_MODELS))
 
-        global ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
-        if ACTIVE_TEXT_MODEL not in TEXT_MODELS and TEXT_MODELS:
-            ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
-        if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS and IMAGE_MODELS:
-            ACTIVE_IMAGE_MODEL = next(iter(IMAGE_MODELS))
-
-        print(f"[NOVA] Catalogue final : {len(TEXT_MODELS)} texte, {len(IMAGE_MODELS)} image.", flush=True)
-    except Exception as e:
-        print(f"[NOVA] Exception /v1/models : {e}", flush=True)
+    print(f"[NOVA] Catalogue final : {len(TEXT_MODELS)} texte, {len(IMAGE_MODELS)} image.", flush=True)
 
 
 fetch_nvidia_models()
@@ -235,10 +247,6 @@ fetch_nvidia_models()
 # RECHERCHE WEB (DuckDuckGo)
 # ============================================================
 def web_search(query, max_results=4):
-    """
-    Recherche web via DuckDuckGo (lite puis html).
-    Retourne une liste de {title, url, snippet, content}.
-    """
     if not query.strip():
         return []
 
@@ -594,7 +602,7 @@ def chat():
 
 
 # ============================================================
-# ROUTE RECHERCHE WEB DIRECTE (debug)
+# ROUTE RECHERCHE WEB DIRECTE
 # ============================================================
 @app.route("/api/search", methods=["POST"])
 def search_endpoint():
@@ -796,7 +804,6 @@ def image_status(job_id):
 # ============================================================
 @app.route("/debug/search")
 def debug_search():
-    """Test la recherche web. Usage : /debug/search?q=..."""
     q = request.args.get("q", "").strip()
     if not q:
         return {"error": "Paramètre ?q= manquant"}, 400
