@@ -104,31 +104,37 @@ CURATED_TEXT_MODELS = {
 }
 
 # ============================================================
-# CATALOGUE CURÉ — Modèles image
-# ⚠️ Ces modèles sont sur ai.api.nvidia.com et n'apparaissent PAS
-# dans /v1/models → on les garde TOUS (pas de filtrage)
+# CATALOGUE CURÉ — Modèles image (uniquement ceux qui marchent 100%)
+# ⚠️ Retirés : flux.1-schnell (trop lent), stable-diffusion-3.5-large (404)
 # ============================================================
 CURATED_IMAGE_MODELS = {
     "black-forest-labs/flux.2-klein-4b": {
         "name": "FLUX.2 Klein 4B",
         "category": "⚡ Rapide",
         "category_key": "rapide",
-        "description": "Ultra-rapide (4 étapes), génération en quelques secondes.",
-        "best_for": "Génération rapide, style artistique",
+        "description": "Le modèle le plus rapide de NVIDIA (moins d'1 seconde).",
+        "best_for": "Génération ultra-rapide, style artistique",
     },
-    "black-forest-labs/flux.1-schnell": {
-        "name": "FLUX.1 Schnell",
+    "stabilityai/sdxl-turbo": {
+        "name": "SDXL Turbo",
+        "category": "⚡ Rapide",
+        "category_key": "rapide",
+        "description": "Génération en une seule étape, quasi instantanée.",
+        "best_for": "Prototypage rapide, temps réel",
+    },
+    "qwen/qwen-image": {
+        "name": "Qwen Image",
         "category": "⚖️ Équilibré",
         "category_key": "equilibre",
-        "description": "Très bonne qualité en 4 étapes, style photoréaliste.",
-        "best_for": "Photo, qualité rapide",
+        "description": "Excellent rendu du texte dans l'image, multilingue.",
+        "best_for": "Affiches, logos, texte dans l'image",
     },
-    "stabilityai/stable-diffusion-3.5-large": {
-        "name": "Stable Diffusion 3.5",
+    "stabilityai/stable-diffusion-xl": {
+        "name": "Stable Diffusion XL",
         "category": "💪 Puissant",
         "category_key": "puissant",
-        "description": "Excellent rendu des détails et du texte dans l'image.",
-        "best_for": "Illustrations détaillées, affiches",
+        "description": "Modèle fiable et polyvalent, très bon équilibre.",
+        "best_for": "Généraliste, portraits, paysages",
     },
 }
 
@@ -204,7 +210,6 @@ def fetch_nvidia_models():
                     else:
                         print(f"[NOVA] ⚠ Texte absent : {mid}", flush=True)
 
-                # Fallback : si aucun modèle curé n'est dispo, prend le 1er modèle chat
                 if not text_models:
                     for m in models:
                         mid = m.get("id", "")
@@ -216,7 +221,6 @@ def fetch_nvidia_models():
         except Exception as e:
             print(f"[NOVA] Exception /v1/models : {e}", flush=True)
 
-    # Fallback ultime : si aucun modèle texte, on garde les curés (utile pour tests)
     if not text_models:
         print(f"[NOVA] ⚠ Aucun modèle texte trouvé, utilisation du catalogue curé par défaut.", flush=True)
         for mid, info in CURATED_TEXT_MODELS.items():
@@ -224,14 +228,13 @@ def fetch_nvidia_models():
 
     TEXT_MODELS = text_models
 
-    # -------- 2) Modèles IMAGE : PAS de filtrage (endpoint différent) --------
+    # -------- 2) Modèles IMAGE : pas de filtrage (endpoint différent) --------
     image_models = {}
     for mid, info in CURATED_IMAGE_MODELS.items():
         image_models[mid] = _build_model_entry(mid, info, "image")
     IMAGE_MODELS = image_models
     print(f"[NOVA] {len(IMAGE_MODELS)} modèles image (non filtrés).", flush=True)
 
-    # -------- 3) Modèle actif --------
     if ACTIVE_TEXT_MODEL not in TEXT_MODELS and TEXT_MODELS:
         ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
     if ACTIVE_IMAGE_MODEL not in IMAGE_MODELS and IMAGE_MODELS:
@@ -261,7 +264,6 @@ def web_search(query, max_results=4):
 
     results = []
 
-    # --- ESSAI 1 : DuckDuckGo Lite ---
     try:
         r = requests.post(
             "https://lite.duckduckgo.com/lite/",
@@ -292,7 +294,6 @@ def web_search(query, max_results=4):
     except Exception as e:
         print(f"[NOVA][SEARCH-LITE] Exception : {e}", flush=True)
 
-    # --- ESSAI 2 : DuckDuckGo HTML (fallback) ---
     if not results:
         try:
             r = requests.get(
@@ -326,7 +327,6 @@ def web_search(query, max_results=4):
         print(f"[NOVA][SEARCH] Aucun résultat pour '{query[:60]}'", flush=True)
         return []
 
-    # --- Extraction du contenu des 2 premières pages ---
     for res in results[:2]:
         try:
             rr = requests.get(
@@ -468,7 +468,6 @@ def chat():
     now = datetime.now()
     date_str = f"{now.day}/{now.month}/{now.year}"
 
-    # === Recherche web si demandée ===
     search_context = ""
     search_failed = False
     last_user_text = ""
