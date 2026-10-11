@@ -104,37 +104,17 @@ CURATED_TEXT_MODELS = {
 }
 
 # ============================================================
-# CATALOGUE CURÉ — Modèles image (uniquement ceux qui marchent 100%)
-# ⚠️ Retirés : flux.1-schnell (trop lent), stable-diffusion-3.5-large (404)
+# CATALOGUE IMAGE — SEUL FLUX.2 Klein 4B fonctionne sur cette clé
+# Les autres modèles (SDXL Turbo, Qwen, SDXL, SD3.5) renvoient 404
+# car ils ne sont pas activés pour ce compte NVIDIA.
 # ============================================================
 CURATED_IMAGE_MODELS = {
     "black-forest-labs/flux.2-klein-4b": {
         "name": "FLUX.2 Klein 4B",
         "category": "⚡ Rapide",
         "category_key": "rapide",
-        "description": "Le modèle le plus rapide de NVIDIA (moins d'1 seconde).",
-        "best_for": "Génération ultra-rapide, style artistique",
-    },
-    "stabilityai/sdxl-turbo": {
-        "name": "SDXL Turbo",
-        "category": "⚡ Rapide",
-        "category_key": "rapide",
-        "description": "Génération en une seule étape, quasi instantanée.",
-        "best_for": "Prototypage rapide, temps réel",
-    },
-    "qwen/qwen-image": {
-        "name": "Qwen Image",
-        "category": "⚖️ Équilibré",
-        "category_key": "equilibre",
-        "description": "Excellent rendu du texte dans l'image, multilingue.",
-        "best_for": "Affiches, logos, texte dans l'image",
-    },
-    "stabilityai/stable-diffusion-xl": {
-        "name": "Stable Diffusion XL",
-        "category": "💪 Puissant",
-        "category_key": "puissant",
-        "description": "Modèle fiable et polyvalent, très bon équilibre.",
-        "best_for": "Généraliste, portraits, paysages",
+        "description": "Génération en 4 étapes, rapide et de bonne qualité.",
+        "best_for": "Génération rapide, style artistique",
     },
 }
 
@@ -189,7 +169,7 @@ def _build_model_entry(mid, curated_info, kind):
 def fetch_nvidia_models():
     global TEXT_MODELS, IMAGE_MODELS, ACTIVE_TEXT_MODEL, ACTIVE_IMAGE_MODEL
 
-    # -------- 1) Modèles TEXTE : filtrés par /v1/models --------
+    # -------- 1) Modèles TEXTE --------
     text_models = {}
     if NVIDIA_API_KEY:
         try:
@@ -228,12 +208,12 @@ def fetch_nvidia_models():
 
     TEXT_MODELS = text_models
 
-    # -------- 2) Modèles IMAGE : pas de filtrage (endpoint différent) --------
+    # -------- 2) Modèles IMAGE (non filtrés) --------
     image_models = {}
     for mid, info in CURATED_IMAGE_MODELS.items():
         image_models[mid] = _build_model_entry(mid, info, "image")
     IMAGE_MODELS = image_models
-    print(f"[NOVA] {len(IMAGE_MODELS)} modèles image (non filtrés).", flush=True)
+    print(f"[NOVA] {len(IMAGE_MODELS)} modèle(s) image.", flush=True)
 
     if ACTIVE_TEXT_MODEL not in TEXT_MODELS and TEXT_MODELS:
         ACTIVE_TEXT_MODEL = next(iter(TEXT_MODELS))
@@ -686,7 +666,7 @@ def upload():
 
 
 # ============================================================
-# GÉNÉRATION D'IMAGES
+# GÉNÉRATION D'IMAGES — SEUL FLUX.2 Klein 4B, pas d'historique
 # ============================================================
 def _save_image_result(job_id, r):
     result = r.json()
@@ -719,32 +699,26 @@ def _save_image_result(job_id, r):
 
 
 def _run_image_job(job_id, user_prompt):
+    """
+    Génération d'image à partir UNIQUEMENT du prompt courant.
+    Pas d'historique de conversation → économise des tokens et évite les fuites.
+    """
     try:
         final_prompt = user_prompt.strip() or "a beautiful abstract art piece"
         final_prompt = _truncate_prompt(final_prompt, max_len=FLUX_MAX_PROMPT_LEN)
         IMAGE_JOBS[job_id]["status"] = "generating"
         IMAGE_JOBS[job_id]["progress"] = 30
 
-        model_info = IMAGE_MODELS.get(ACTIVE_IMAGE_MODEL)
-        if not model_info:
-            IMAGE_JOBS[job_id]["status"] = "error"
-            IMAGE_JOBS[job_id]["error"] = "Aucun modèle image actif."
-            return
+        # Endpoint fixe : seul flux.2-klein-4b fonctionne
+        endpoint = f"{NVIDIA_IMAGE_BASE}/black-forest-labs/flux.2-klein-4b"
 
-        endpoint = model_info["endpoint"]
-        fmt = model_info.get("payload_format", "flux")
-
-        if fmt == "sdxl":
-            payload = {
-                "text_prompts": [{"text": final_prompt}],
-                "cfg_scale": 5.0, "seed": 0, "steps": 30,
-                "width": 1024, "height": 1024,
-            }
-        else:
-            payload = {
-                "prompt": final_prompt,
-                "width": 1024, "height": 1024, "steps": 4, "seed": 0,
-            }
+        payload = {
+            "prompt": final_prompt,
+            "width": 1024,
+            "height": 1024,
+            "steps": 4,
+            "seed": 0,
+        }
 
         headers = {
             "Authorization": f"Bearer {NVIDIA_API_KEY}",
@@ -771,6 +745,8 @@ def image_start():
     data = request.get_json() or {}
     user_prompt = (data.get("prompt") or "").strip()
     ref_desc = (data.get("reference_description") or "").strip()
+
+    # On utilise le prompt utilisateur, sinon la description de l'image jointe
     if not user_prompt and not ref_desc:
         return {"error": "Prompt vide."}, 400
     if not user_prompt:
